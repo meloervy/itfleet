@@ -320,4 +320,266 @@ class ItamManagementTest extends TestCase
                 ->where('device.maintenance_logs.0.cost', null)
             );
     }
+
+    public function test_maintenance_index_filters_active_queue_and_sorts_by_device_without_ambiguity(): void
+    {
+        $deviceA = Device::create([
+            'asset_tag' => 'DSK-ALPHA-01',
+            'device_type' => 'desktop',
+            'brand' => 'Dell',
+            'model' => 'Precision 7960',
+            'cpu' => 'Intel Xeon w9',
+            'cpu_tier' => 'workstation',
+            'ram_gb' => 128,
+            'storage_type' => 'SSD',
+            'storage_gb' => 2048,
+            'gpu_tier' => 'dedicated-high',
+            'year_acquired' => now()->year,
+            'condition' => 'good',
+            'status' => 'in_repair',
+            'lifecycle_stage' => 'maintenance',
+        ]);
+
+        $deviceB = Device::create([
+            'asset_tag' => 'LAP-BETA-01',
+            'device_type' => 'laptop',
+            'brand' => 'Apple',
+            'model' => 'MacBook Pro 14',
+            'cpu' => 'Apple M3 Pro',
+            'cpu_tier' => 'high',
+            'ram_gb' => 18,
+            'storage_type' => 'SSD',
+            'storage_gb' => 512,
+            'gpu_tier' => 'dedicated-mid',
+            'year_acquired' => now()->year,
+            'condition' => 'good',
+            'status' => 'available',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        MaintenanceLog::create([
+            'device_id' => $deviceB->id,
+            'type' => 'inspection',
+            'title' => 'Quarterly Battery Health Check',
+            'description' => 'Scheduled diagnostic pass.',
+            'cost' => 1200.00,
+            'started_at' => now()->addDays(2)->toDateString(),
+            'status' => 'scheduled',
+        ]);
+
+        MaintenanceLog::create([
+            'device_id' => $deviceA->id,
+            'type' => 'repair',
+            'title' => 'Coolant Loop Seal Replacement',
+            'description' => 'Active service bay work.',
+            'cost' => 6500.00,
+            'started_at' => now()->toDateString(),
+            'status' => 'in_progress',
+        ]);
+
+        MaintenanceLog::create([
+            'device_id' => $deviceA->id,
+            'type' => 'preventive',
+            'title' => 'Completed Fan Cleaning',
+            'description' => 'Air filter purged.',
+            'cost' => 2500.00,
+            'started_at' => now()->subDays(10)->toDateString(),
+            'completed_at' => now()->subDays(9)->toDateString(),
+            'status' => 'completed',
+        ]);
+
+        MaintenanceLog::create([
+            'device_id' => $deviceB->id,
+            'type' => 'upgrade',
+            'title' => 'Cancelled Dock Order',
+            'description' => 'No longer needed.',
+            'cost' => 900.00,
+            'started_at' => now()->subDays(5)->toDateString(),
+            'status' => 'cancelled',
+        ]);
+
+        $this->actingAs($this->user)
+            ->get(route('maintenance.index', [
+                'status' => 'active',
+                'sort' => 'device',
+                'direction' => 'asc',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Maintenance/Index')
+                ->has('logs.data', 2)
+                ->where('logs.data.0.device.asset_tag', 'DSK-ALPHA-01')
+                ->where('logs.data.0.status', 'in_progress')
+                ->where('logs.data.1.device.asset_tag', 'LAP-BETA-01')
+                ->where('logs.data.1.status', 'scheduled')
+                ->where('stats.active_count', 2)
+                ->where('stats.scheduled_count', 1)
+                ->where('stats.in_progress_count', 1)
+                ->where('stats.completed_count', 1)
+                ->where('stats.cancelled_count', 1)
+                ->where('stats.total_count', 4)
+                ->where('stats.in_service_bay_count', 1)
+            );
+    }
+
+    public function test_maintenance_hub_redacts_financials_and_preserves_cost_for_technician(): void
+    {
+        $activeDevice = Device::create([
+            'asset_tag' => 'LAP-MNT-10',
+            'device_type' => 'laptop',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad T14',
+            'cpu' => 'AMD Ryzen 7 PRO',
+            'cpu_tier' => 'high',
+            'ram_gb' => 32,
+            'storage_type' => 'SSD',
+            'storage_gb' => 1024,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => now()->year,
+            'purchase_cost' => 82000.00,
+            'condition' => 'good',
+            'status' => 'in_repair',
+            'lifecycle_stage' => 'maintenance',
+        ]);
+
+        Device::create([
+            'asset_tag' => 'LAP-RET-99',
+            'device_type' => 'laptop',
+            'brand' => 'HP',
+            'model' => 'EliteBook 840',
+            'cpu' => 'Intel Core i5',
+            'cpu_tier' => 'mid',
+            'ram_gb' => 16,
+            'storage_type' => 'SSD',
+            'storage_gb' => 256,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => now()->subYears(5)->year,
+            'purchase_cost' => 45000.00,
+            'condition' => 'retired',
+            'status' => 'retired',
+            'lifecycle_stage' => 'retirement',
+        ]);
+
+        $log = MaintenanceLog::create([
+            'device_id' => $activeDevice->id,
+            'type' => 'repair',
+            'title' => 'Display Hinges & Cable Replacement',
+            'description' => 'Replacing loose hinges and eDP display cable.',
+            'cost' => 5400.00,
+            'performed_by' => 'Internal Hardware Bench',
+            'started_at' => now()->toDateString(),
+            'status' => 'in_progress',
+        ]);
+
+        MaintenanceLog::create([
+            'device_id' => $activeDevice->id,
+            'type' => 'preventive',
+            'title' => 'Thermal Repaste',
+            'description' => 'Completed thermal service.',
+            'cost' => 1500.00,
+            'started_at' => now()->subDays(12)->toDateString(),
+            'completed_at' => now()->subDays(11)->toDateString(),
+            'status' => 'completed',
+        ]);
+
+        $auditor = User::factory()->viewer()->create();
+        $technician = User::factory()->technician()->create();
+
+        // Admin sees financials and selectable non-retired devices
+        $this->actingAs($this->user)
+            ->get(route('maintenance.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('can_view_financials', true)
+                ->where('financials_restricted', false)
+                ->where('stats.total_spend', 1500)
+                ->where('logs.data.0.cost', 5400)
+                ->has('devices', 1)
+                ->where('devices.0.asset_tag', 'LAP-MNT-10')
+            );
+
+        // Auditor sees financials, but gets empty selectable devices (read-only)
+        $this->actingAs($auditor)
+            ->get(route('maintenance.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('can_view_financials', true)
+                ->where('stats.total_spend', 1500)
+                ->where('logs.data.0.cost', 5400)
+                ->has('devices', 0)
+            );
+
+        // Technician gets redacted financials, yet receives selectable non-retired devices
+        $this->actingAs($technician)
+            ->get(route('maintenance.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('can_view_financials', false)
+                ->where('financials_restricted', true)
+                ->where('stats.total_spend', null)
+                ->where('logs.data.0.cost', null)
+                ->missing('logs.data.0.device.purchase_cost')
+                ->missing('logs.data.0.device.current_book_value')
+                ->has('devices', 1)
+                ->where('devices.0.asset_tag', 'LAP-MNT-10')
+            );
+
+        // Technician can complete servicing without cost (even if cost=0 is spoofed), preserving original cost
+        $this->actingAs($technician)
+            ->put(route('maintenance.update', $log->id), [
+                'cost' => 0,
+                'status' => 'completed',
+                'completed_at' => now()->toDateString(),
+                'performance_assessment' => 'Display backlight and hinge torque verified across 50 cycles.',
+                'restore_to_available' => true,
+            ])
+            ->assertRedirect();
+
+        $log->refresh();
+        $activeDevice->refresh();
+
+        $this->assertEquals(5400.00, $log->cost);
+        $this->assertEquals('completed', $log->status);
+        $this->assertEquals('deployment', $activeDevice->lifecycle_stage);
+        $this->assertEquals('available', $activeDevice->status);
+
+        // Technician can log new maintenance from the Hub without sending cost (defaults to 0.00)
+        $this->actingAs($technician)
+            ->post(route('devices.maintenance.store', $activeDevice->id), [
+                'type' => 'inspection',
+                'title' => 'Chassis Integrity Inspection',
+                'description' => 'Routine post-hinge repair verification.',
+                'performed_by' => 'Tech Bench',
+                'started_at' => now()->toDateString(),
+                'status' => 'scheduled',
+                'send_to_maintenance_stage' => false,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('maintenance_logs', [
+            'device_id' => $activeDevice->id,
+            'title' => 'Chassis Integrity Inspection',
+            'cost' => 0.00,
+            'status' => 'scheduled',
+        ]);
+
+        // Auditor cannot mutate maintenance logs
+        $this->actingAs($auditor)
+            ->post(route('devices.maintenance.store', $activeDevice->id), [
+                'type' => 'repair',
+                'title' => 'Unauthorized Log',
+                'description' => 'Should be forbidden.',
+                'cost' => 100,
+                'started_at' => now()->toDateString(),
+                'status' => 'scheduled',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($auditor)
+            ->put(route('maintenance.update', $log->id), [
+                'cost' => 9999,
+                'status' => 'cancelled',
+            ])
+            ->assertForbidden();
+    }
 }

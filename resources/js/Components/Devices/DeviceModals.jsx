@@ -82,6 +82,7 @@ export function LogMaintenanceModal({
     data,
     setData,
     processing,
+    canViewFinancials = true,
     onClose,
     onSubmit,
 }) {
@@ -101,7 +102,7 @@ export function LogMaintenanceModal({
                     </button>
                 </div>
                 <form onSubmit={onSubmit} className="mt-4 space-y-3.5">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className={`grid gap-3 ${canViewFinancials ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         <div>
                             <label className={`${labelClasses} mb-1.5`}>Activity Type</label>
                             <CustomSelect
@@ -116,18 +117,20 @@ export function LogMaintenanceModal({
                                 ]}
                             />
                         </div>
-                        <div>
-                            <label className={labelClasses}>Cost (₱)</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={data.cost}
-                                onChange={(e) => setData('cost', e.target.value)}
-                                className={inputClasses}
-                                required
-                            />
-                        </div>
+                        {canViewFinancials && (
+                            <div>
+                                <label className={labelClasses}>Cost (₱)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={data.cost}
+                                    onChange={(e) => setData('cost', e.target.value)}
+                                    className={inputClasses}
+                                    required
+                                />
+                            </div>
+                        )}
                     </div>
                     <div>
                         <label className={labelClasses}>Title</label>
@@ -213,6 +216,7 @@ export function UpdateMaintenanceLogModal({
     data,
     setData,
     processing,
+    canViewFinancials = true,
     onClose,
     onSubmit,
 }) {
@@ -235,19 +239,21 @@ export function UpdateMaintenanceLogModal({
                     </button>
                 </div>
                 <form onSubmit={onSubmit} className="mt-4 space-y-3.5">
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className={labelClasses}>Final Cost (₱)</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={data.cost}
-                                onChange={(e) => setData('cost', e.target.value)}
-                                className={inputClasses}
-                                required
-                            />
-                        </div>
+                    <div className={`grid gap-3 ${canViewFinancials ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {canViewFinancials && (
+                            <div>
+                                <label className={labelClasses}>Final Cost (₱)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={data.cost}
+                                    onChange={(e) => setData('cost', e.target.value)}
+                                    className={inputClasses}
+                                    required
+                                />
+                            </div>
+                        )}
                         <div>
                             <label className={labelClasses}>Completion Date</label>
                             <input

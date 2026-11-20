@@ -268,7 +268,7 @@ export default function DevicesShow({ device, employees = [], can_view_financial
     const handleOpenUpdateLog = (log) => {
         setSelectedLogToUpdate(log);
         setUpdateMaintData({
-            cost: log.cost || 0,
+            cost: canViewFinancials ? (log.cost ?? 0) : '',
             completed_at: toDateInputValue(log.completed_at) || new Date().toISOString().split('T')[0],
             performance_assessment: log.performance_assessment || '',
             status: 'completed',
@@ -1379,6 +1379,7 @@ export default function DevicesShow({ device, employees = [], can_view_financial
                 data={maintData}
                 setData={setMaintData}
                 processing={maintProcessing}
+                canViewFinancials={canViewFinancials}
                 onClose={() => setShowMaintenanceModal(false)}
                 onSubmit={handleCreateMaintenance}
             />
@@ -1388,6 +1389,7 @@ export default function DevicesShow({ device, employees = [], can_view_financial
                 data={updateMaintData}
                 setData={setUpdateMaintData}
                 processing={updateMaintProcessing}
+                canViewFinancials={canViewFinancials}
                 onClose={() => setSelectedLogToUpdate(null)}
                 onSubmit={handleUpdateMaintenanceLog}
             />
