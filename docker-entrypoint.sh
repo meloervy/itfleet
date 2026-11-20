@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "==> Preparing SpecMatch for production startup..."
+echo "==> Preparing ITFleet for production startup..."
 
 # Ensure database directory and SQLite file exist
 mkdir -p /app/database /app/storage/framework/cache /app/storage/framework/sessions /app/storage/framework/views /app/storage/logs /app/bootstrap/cache
@@ -43,7 +43,7 @@ php artisan view:cache
 
 # Determine port
 SERVER_PORT="${PORT:-8080}"
-echo "==> SpecMatch is ready! Serving on 0.0.0.0:${SERVER_PORT}..."
+echo "==> ITFleet is ready! Serving on 0.0.0.0:${SERVER_PORT}..."
 
 # Exec web server
 exec php -d variables_order=EGPCS -S "0.0.0.0:${SERVER_PORT}" -t /app/public

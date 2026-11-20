@@ -22,7 +22,7 @@ class MatchingController extends Controller
         $profiles = RoleProfile::orderBy('name')->get();
         $recentRequests = MatchRequest::with('employee')->latest('id')->take(5)->get();
 
-        $availableDevices = Device::where('status', 'available')->orderBy('cpu_tier')->get();
+        $availableDevices = Device::where('status', 'available')->compute()->orderBy('cpu_tier')->get();
         $deployableSummary = [
             'total_available' => $availableDevices->count(),
             'laptops_count' => $availableDevices->where('device_type', 'laptop')->count(),
@@ -65,12 +65,12 @@ class MatchingController extends Controller
     }
 
     /**
-     * Test connectivity specifically to Gemini 3.1 Flash-Lite.
+     * Test connectivity specifically to Gemini 4 Hydrogen.
      */
     public function testGemini(Request $request, GeminiService $geminiService): JsonResponse
     {
-        $model = $request->input('model', config('services.gemini.model', 'gemini-3.1-flash-lite'));
-        $result = $geminiService->testConnectivity($model);
+        $model = $request->input('model');
+        $result = $geminiService->testConnectivity(is_string($model) && trim($model) !== '' ? trim($model) : null);
 
         return response()->json($result);
     }

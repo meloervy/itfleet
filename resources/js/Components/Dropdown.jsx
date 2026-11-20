@@ -39,7 +39,7 @@ const Content = ({
     align = 'right',
     width = '56',
     placement = 'bottom',
-    contentClasses = 'p-1.5 backdrop-blur-xl bg-white/95 dark:bg-zinc-900/95 border border-slate-200/90 dark:border-zinc-800/90 shadow-2xl shadow-slate-900/15 dark:shadow-black/70 ring-1 ring-black/5 dark:ring-white/10',
+    contentClasses = 'p-1 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700',
     children,
 }) => {
     const { open, setOpen } = useContext(DropDownContext);
@@ -88,10 +88,10 @@ const Content = ({
             leaveTo="opacity-0 scale-95 -translate-y-1"
         >
             <div
-                className={`absolute z-50 ${positionClasses} rounded-2xl ${alignmentClasses} ${widthClasses}`}
+                className={`absolute z-50 ${positionClasses} rounded-sm ${alignmentClasses} ${widthClasses}`}
                 onClick={() => setOpen(false)}
             >
-                <div className={`rounded-2xl overflow-hidden ${contentClasses}`}>
+                <div className={`rounded-sm overflow-hidden ${contentClasses}`}>
                     {children}
                 </div>
             </div>
@@ -105,17 +105,17 @@ const DropdownHeader = ({ title, subtitle, badge, children, className = '' }) =>
     }
 
     return (
-        <div className={`px-3 py-2 border-b border-slate-100 dark:border-zinc-800/80 mb-1 ${className}`}>
+        <div className={`px-2.5 py-2 border-b border-zinc-100 dark:border-zinc-800 mb-1 ${className}`}>
             <div className="flex items-center justify-between gap-2">
                 {title && (
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                         {title}
                     </div>
                 )}
                 {badge && <div>{badge}</div>}
             </div>
             {subtitle && (
-                <div className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
                     {subtitle}
                 </div>
             )}
@@ -125,7 +125,7 @@ const DropdownHeader = ({ title, subtitle, badge, children, className = '' }) =>
 
 const DropdownDivider = ({ className = '' }) => {
     return (
-        <div className={`my-1 border-t border-slate-100 dark:border-zinc-800/80 ${className}`} />
+        <div className={`my-1 border-t border-zinc-100 dark:border-zinc-800 ${className}`} />
     );
 };
 
@@ -140,48 +140,43 @@ const DropdownLink = ({
     children,
     ...props
 }) => {
-    let variantStyles = 'text-slate-700 dark:text-zinc-200 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70';
-    let iconBadgeStyles = 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 group-hover:bg-[#026eff]/10 group-hover:text-[#026eff] dark:group-hover:text-[#38bdf8]';
+    let variantStyles = 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/80';
 
     if (variant === 'danger') {
-        variantStyles = 'text-rose-600 dark:text-rose-400 hover:bg-rose-50/80 dark:hover:bg-rose-950/40';
-        iconBadgeStyles = 'bg-rose-50 dark:bg-rose-950/50 text-rose-500 dark:text-rose-400 group-hover:bg-rose-100 dark:group-hover:bg-rose-900/50';
+        variantStyles = 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40';
     } else if (variant === 'primary') {
-        variantStyles = 'text-[#026eff] dark:text-[#38bdf8] hover:bg-[#026eff]/10 dark:hover:bg-[#026eff]/20';
-        iconBadgeStyles = 'bg-[#026eff]/10 dark:bg-[#026eff]/20 text-[#026eff] dark:text-[#38bdf8]';
+        variantStyles = 'text-[#026eff] dark:text-sky-400 hover:bg-[#026eff]/10 dark:hover:bg-[#026eff]/15';
     }
 
     if (active) {
-        variantStyles += ' bg-slate-100/90 dark:bg-zinc-800 font-semibold';
+        variantStyles += ' bg-zinc-100 dark:bg-zinc-800 font-medium';
     }
 
     return (
         <Link
             {...props}
             className={
-                'group flex items-center justify-between gap-2.5 w-full px-2.5 py-2 text-start text-xs font-medium rounded-xl transition duration-150 ease-in-out focus:outline-none cursor-pointer ' +
+                'group flex items-center justify-between gap-2 w-full px-2.5 py-1.5 text-start text-xs font-medium rounded-sm transition duration-150 ease-in-out focus:outline-none cursor-pointer ' +
                 variantStyles +
                 ' ' +
                 className
             }
         >
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
                 {Icon && (
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition ${iconBadgeStyles}`}>
-                        <Icon className={`w-3.5 h-3.5 ${iconClassName}`} />
-                    </div>
+                    <Icon className={`w-3.5 h-3.5 shrink-0 opacity-75 ${iconClassName}`} />
                 )}
                 <div className="min-w-0 flex-1">
-                    <div className="truncate leading-tight font-semibold">{children}</div>
+                    <div className="truncate leading-tight">{children}</div>
                     {description && (
-                        <div className="text-[10px] text-slate-400 dark:text-zinc-500 truncate mt-0.5">
+                        <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
                             {description}
                         </div>
                     )}
                 </div>
             </div>
             {badge && (
-                <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
+                <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     {badge}
                 </span>
             )}
@@ -201,19 +196,16 @@ const DropdownButton = ({
     onClick,
     ...props
 }) => {
-    let variantStyles = 'text-slate-700 dark:text-zinc-200 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70';
-    let iconBadgeStyles = 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 group-hover:bg-[#026eff]/10 group-hover:text-[#026eff] dark:group-hover:text-[#38bdf8]';
+    let variantStyles = 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/80';
 
     if (variant === 'danger') {
-        variantStyles = 'text-rose-600 dark:text-rose-400 hover:bg-rose-50/80 dark:hover:bg-rose-950/40';
-        iconBadgeStyles = 'bg-rose-50 dark:bg-rose-950/50 text-rose-500 dark:text-rose-400 group-hover:bg-rose-100 dark:group-hover:bg-rose-900/50';
+        variantStyles = 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40';
     } else if (variant === 'primary') {
-        variantStyles = 'text-[#026eff] dark:text-[#38bdf8] hover:bg-[#026eff]/10 dark:hover:bg-[#026eff]/20';
-        iconBadgeStyles = 'bg-[#026eff]/10 dark:bg-[#026eff]/20 text-[#026eff] dark:text-[#38bdf8]';
+        variantStyles = 'text-[#026eff] dark:text-sky-400 hover:bg-[#026eff]/10 dark:hover:bg-[#026eff]/15';
     }
 
     if (active) {
-        variantStyles += ' bg-slate-100/90 dark:bg-zinc-800 font-semibold';
+        variantStyles += ' bg-zinc-100 dark:bg-zinc-800 font-medium';
     }
 
     return (
@@ -222,29 +214,27 @@ const DropdownButton = ({
             onClick={onClick}
             {...props}
             className={
-                'group flex items-center justify-between gap-2.5 w-full px-2.5 py-2 text-start text-xs font-medium rounded-xl transition duration-150 ease-in-out focus:outline-none cursor-pointer ' +
+                'group flex items-center justify-between gap-2 w-full px-2.5 py-1.5 text-start text-xs font-medium rounded-sm transition duration-150 ease-in-out focus:outline-none cursor-pointer ' +
                 variantStyles +
                 ' ' +
                 className
             }
         >
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
                 {Icon && (
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition ${iconBadgeStyles}`}>
-                        <Icon className={`w-3.5 h-3.5 ${iconClassName}`} />
-                    </div>
+                    <Icon className={`w-3.5 h-3.5 shrink-0 opacity-75 ${iconClassName}`} />
                 )}
                 <div className="min-w-0 flex-1">
-                    <div className="truncate leading-tight font-semibold">{children}</div>
+                    <div className="truncate leading-tight">{children}</div>
                     {description && (
-                        <div className="text-[10px] text-slate-400 dark:text-zinc-500 truncate mt-0.5">
+                        <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
                             {description}
                         </div>
                     )}
                 </div>
             </div>
             {badge && (
-                <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
+                <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     {badge}
                 </span>
             )}

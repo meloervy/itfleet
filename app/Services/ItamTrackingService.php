@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Device;
 use App\Models\MaintenanceLog;
+use App\Models\SoftwareLicense;
 use Carbon\Carbon;
 
 class ItamTrackingService
@@ -13,18 +14,30 @@ class ItamTrackingService
      */
     public function getFinancialSummary(): array
     {
-        $devices = Device::all();
+        $defaultCost = (float) config('itam.default_purchase_cost', 65000.00);
 
-        $totalAcquisitionCost = $devices->sum(fn ($d) => $d->purchase_cost ?? 65000.00);
-        $currentBookValue = $devices->sum(fn ($d) => $d->current_book_value);
+        $totalAcquisitionCost = (float) Device::query()
+            ->selectRaw('COALESCE(SUM(COALESCE(purchase_cost, ?)), 0) as total_cost', [$defaultCost])
+            ->value('total_cost');
+
+        $stageCounts = Device::query()
+            ->selectRaw('lifecycle_stage, COUNT(*) as total')
+            ->groupBy('lifecycle_stage')
+            ->pluck('total', 'lifecycle_stage');
+
+        $currentBookValue = Device::query()
+            ->select(['id', 'device_type', 'purchase_cost', 'purchase_date', 'year_acquired', 'depreciation_rate_percent'])
+            ->get()
+            ->sum(fn ($d) => $d->current_book_value);
+
         $totalDepreciation = max(0, $totalAcquisitionCost - $currentBookValue);
 
         $stageBreakdown = [
-            'acquisition' => $devices->where('lifecycle_stage', 'acquisition')->count(),
-            'deployment' => $devices->where('lifecycle_stage', 'deployment')->count(),
-            'reclaimed' => $devices->where('lifecycle_stage', 'reclaimed')->count(),
-            'maintenance' => $devices->where('lifecycle_stage', 'maintenance')->count(),
-            'retirement' => $devices->where('lifecycle_stage', 'retirement')->count(),
+            'acquisition' => (int) ($stageCounts['acquisition'] ?? 0),
+            'deployment' => (int) ($stageCounts['deployment'] ?? 0),
+            'reclaimed' => (int) ($stageCounts['reclaimed'] ?? 0),
+            'maintenance' => (int) ($stageCounts['maintenance'] ?? 0),
+            'retirement' => (int) ($stageCounts['retirement'] ?? 0),
         ];
 
         return [
@@ -40,6 +53,7 @@ class ItamTrackingService
      */
     public function getWarrantyAlerts(): array
     {
+        $warningDays = (int) config('itam.warranty_warning_days', 60);
         $devices = Device::whereNotNull('warranty_expiry')
             ->where('status', '!=', 'retired')
             ->get();
@@ -50,10 +64,10 @@ class ItamTrackingService
         $now = Carbon::now();
 
         foreach ($devices as $device) {
-            $expiry = Carbon::parse($device->warranty_expiry);
+            $expiry = Carbon::parse($device->warranty_expiry)->endOfDay();
             if ($expiry->isPast()) {
                 $expired[] = $device;
-            } elseif ($expiry->diffInDays($now) <= 60) {
+            } elseif ($now->diffInDays($expiry, false) <= $warningDays) {
                 $expiringSoon[] = $device;
             }
         }
@@ -91,14 +105,69 @@ class ItamTrackingService
      */
     public function detectRedundantAssets(): array
     {
-        // High-spec idle machines (idle capital tie-up)
+        // High-spec idle compute machines (idle capital tie-up)
         $idleHighSpec = Device::available()
+            ->compute()
             ->whereIn('cpu_tier', ['high', 'workstation'])
             ->get();
 
         return [
             'idle_high_spec_count' => $idleHighSpec->count(),
             'idle_high_spec_devices' => $idleHighSpec,
+        ];
+    }
+
+    /**
+     * Return asset inventory counts grouped by hardware category.
+     *
+     * @return array<string, int>
+     */
+    public function getCategoryBreakdown(): array
+    {
+        $counts = Device::query()
+            ->where('status', '!=', 'retired')
+            ->selectRaw('device_type, COUNT(*) as total')
+            ->groupBy('device_type')
+            ->pluck('total', 'device_type');
+
+        return [
+            'laptop' => (int) ($counts['laptop'] ?? 0),
+            'desktop' => (int) ($counts['desktop'] ?? 0),
+            'monitor' => (int) ($counts['monitor'] ?? 0),
+            'mobile' => (int) ($counts['mobile'] ?? 0),
+            'peripheral' => (int) ($counts['peripheral'] ?? 0),
+        ];
+    }
+
+    /**
+     * Summarize software license seat utilization, annualized spend, and renewals.
+     *
+     * @return array<string, int|float>
+     */
+    public function getSoftwareLicenseSummary(): array
+    {
+        $licenses = SoftwareLicense::withCount('activeAssignments')->get();
+
+        $totalLicenses = $licenses->count();
+        $activeLicenses = $licenses->where('status', 'active');
+        $totalSeats = (int) $activeLicenses->sum('total_seats');
+        $assignedSeats = (int) $activeLicenses->sum('active_assignments_count');
+        $availableSeats = max(0, $totalSeats - $assignedSeats);
+        $utilizationPct = $totalSeats > 0 ? round(($assignedSeats / $totalSeats) * 100, 1) : 0.0;
+        $annualSpend = round((float) $activeLicenses->sum(fn (SoftwareLicense $l) => $l->annualized_cost), 2);
+        $expiringSoonCount = $activeLicenses->filter(fn (SoftwareLicense $l) => $l->renewal_status === 'expiring_soon')->count();
+        $expiredCount = $activeLicenses->filter(fn (SoftwareLicense $l) => $l->renewal_status === 'expired')->count();
+
+        return [
+            'total_licenses' => $totalLicenses,
+            'active_licenses' => $activeLicenses->count(),
+            'total_seats' => $totalSeats,
+            'assigned_seats' => $assignedSeats,
+            'available_seats' => $availableSeats,
+            'seat_utilization_pct' => $utilizationPct,
+            'annual_software_spend' => $annualSpend,
+            'expiring_soon_count' => $expiringSoonCount,
+            'expired_count' => $expiredCount,
         ];
     }
 

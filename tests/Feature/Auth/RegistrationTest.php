@@ -29,12 +29,12 @@ class RegistrationTest extends TestCase
         $response->assertRedirect(route('dashboard', absolute: false));
     }
 
-    public function test_new_users_can_register_with_role_and_department(): void
+    public function test_new_users_cannot_self_assign_privileged_role_and_always_receive_viewer_role(): void
     {
         $response = $this->post('/register', [
             'name' => 'IT Specialist',
-            'email' => 'specialist@specmatch.local',
-            'role' => 'manager',
+            'email' => 'specialist@itfleet.local',
+            'role' => 'admin',
             'department' => 'Hardware Asset Lifecycle',
             'password' => 'password',
             'password_confirmation' => 'password',
@@ -42,8 +42,8 @@ class RegistrationTest extends TestCase
 
         $this->assertAuthenticated();
         $this->assertDatabaseHas('users', [
-            'email' => 'specialist@specmatch.local',
-            'role' => 'manager',
+            'email' => 'specialist@itfleet.local',
+            'role' => 'viewer',
             'department' => 'Hardware Asset Lifecycle',
         ]);
         $response->assertRedirect(route('dashboard', absolute: false));

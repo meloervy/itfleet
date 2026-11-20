@@ -14,7 +14,7 @@ window.axios.interceptors.response.use(
 
             // Dispatch global event for UI layouts and modals
             window.dispatchEvent(
-                new CustomEvent('specmatch:session-expired', {
+                new CustomEvent('itfleet:session-expired', {
                     detail: {
                         status,
                         message,

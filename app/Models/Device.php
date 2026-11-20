@@ -13,6 +13,10 @@ class Device extends Model
 {
     use HasFactory;
 
+    public const COMPUTE_TYPES = ['laptop', 'desktop'];
+
+    public const ALL_TYPES = ['laptop', 'desktop', 'monitor', 'mobile', 'peripheral'];
+
     protected $fillable = [
         'asset_tag',
         'serial_number',
@@ -30,6 +34,7 @@ class Device extends Model
         'storage_gb',
         'gpu',
         'gpu_tier',
+        'specifications',
         'year_acquired',
         'purchase_cost',
         'purchase_date',
@@ -47,6 +52,7 @@ class Device extends Model
     protected $casts = [
         'ram_gb' => 'integer',
         'storage_gb' => 'integer',
+        'specifications' => 'array',
         'year_acquired' => 'integer',
         'purchase_cost' => 'float',
         'purchase_date' => 'date',
@@ -60,6 +66,7 @@ class Device extends Model
         'warranty_status',
         'days_until_warranty_expiry',
         'image_clip_url',
+        'spec_summary',
     ];
 
     protected static function booted(): void
@@ -107,6 +114,19 @@ class Device extends Model
         return $query->where('lifecycle_stage', 'deployment');
     }
 
+    public function scopeCompute($query)
+    {
+        return $query->whereIn('device_type', self::COMPUTE_TYPES);
+    }
+
+    /**
+     * Determine if this device is a compute workstation eligible for workload matching.
+     */
+    public function isComputeDevice(): bool
+    {
+        return in_array($this->device_type, self::COMPUTE_TYPES, true);
+    }
+
     /**
      * Determine if device is aging (>= 3 years old in service).
      */
@@ -148,11 +168,23 @@ class Device extends Model
      */
     public function getCurrentBookValueAttribute(): float
     {
-        $cost = $this->purchase_cost ?? 65000.00;
+        $categoryFallback = match ($this->device_type) {
+            'monitor' => 18000.00,
+            'mobile' => 38000.00,
+            'peripheral' => 8500.00,
+            default => (float) config('itam.default_purchase_cost', 65000.00),
+        };
+        $cost = $this->purchase_cost ?? $categoryFallback;
         $rate = ($this->depreciation_rate_percent ?? 20.00) / 100.0;
 
-        $startDate = $this->purchase_date ? Carbon::parse($this->purchase_date) : Carbon::createFromDate($this->year_acquired, 1, 1);
-        $yearsElapsed = max(0, Carbon::now()->diffInDays($startDate) / 365.25);
+        $now = Carbon::now();
+        $startDate = $this->purchase_date
+            ? Carbon::parse($this->purchase_date)
+            : Carbon::createFromDate($this->year_acquired ?: $now->year, 1, 1);
+
+        $yearsElapsed = $startDate->isFuture()
+            ? 0.0
+            : max(0.0, $startDate->diffInDays($now, false) / 365.25);
 
         $depreciated = $cost * (1 - ($rate * $yearsElapsed));
         $salvageFloor = $cost * 0.10; // 10% salvage residual value floor
@@ -169,14 +201,16 @@ class Device extends Model
             return 'none';
         }
 
-        $expiry = Carbon::parse($this->warranty_expiry);
+        $expiry = Carbon::parse($this->warranty_expiry)->endOfDay();
         $now = Carbon::now();
 
         if ($expiry->isPast()) {
             return 'expired';
         }
 
-        if ($expiry->diffInDays($now) <= 60) {
+        $warningDays = (int) config('itam.warranty_warning_days', 60);
+
+        if ($now->diffInDays($expiry, false) <= $warningDays) {
             return 'expiring_soon';
         }
 
@@ -192,9 +226,9 @@ class Device extends Model
             return null;
         }
 
-        $expiry = Carbon::parse($this->warranty_expiry);
+        $expiry = Carbon::parse($this->warranty_expiry)->startOfDay();
 
-        return (int) Carbon::now()->diffInDays($expiry, false);
+        return (int) Carbon::now()->startOfDay()->diffInDays($expiry, false);
     }
 
     /**
@@ -203,5 +237,43 @@ class Device extends Model
     public function getImageClipUrlAttribute(): string
     {
         return HardwareImageService::resolveForDevice($this);
+    }
+
+    /**
+     * Human-readable specification summary across compute and non-compute categories.
+     */
+    public function getSpecSummaryAttribute(): string
+    {
+        if ($this->isComputeDevice()) {
+            $parts = array_filter([
+                $this->cpu,
+                $this->ram_gb ? "{$this->ram_gb}GB RAM" : null,
+                $this->storage_gb ? trim("{$this->storage_gb}GB ".($this->storage_type ?? '')) : null,
+            ]);
+
+            return ! empty($parts) ? implode(' • ', $parts) : ucfirst((string) $this->device_type);
+        }
+
+        $specs = is_array($this->specifications) ? $this->specifications : [];
+        $preferredKeys = ['screen_size', 'resolution', 'panel_type', 'refresh_rate', 'os', 'storage', 'subtype', 'connectivity', 'carrier', 'imei'];
+        $parts = [];
+
+        foreach ($preferredKeys as $key) {
+            if (! empty($specs[$key])) {
+                $parts[] = trim((string) $specs[$key]);
+            }
+        }
+
+        foreach ($specs as $key => $val) {
+            if (! in_array($key, $preferredKeys, true) && ! empty($val)) {
+                $parts[] = trim((string) $val);
+            }
+        }
+
+        if ($this->storage_gb && empty($specs['storage'])) {
+            $parts[] = "{$this->storage_gb}GB".($this->storage_type ? " {$this->storage_type}" : '');
+        }
+
+        return ! empty($parts) ? implode(' • ', $parts) : ucfirst((string) $this->device_type);
     }
 }

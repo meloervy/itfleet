@@ -56,6 +56,14 @@ class DevicePolicy
     }
 
     /**
+     * Determine whether the user can export device inventory CSV reports.
+     */
+    public function exportCsv(User $user): bool
+    {
+        return $user->isAdmin() || $user->isManager();
+    }
+
+    /**
      * Determine whether the user can update device lifecycle stage.
      */
     public function updateLifecycle(User $user, Device $device): bool

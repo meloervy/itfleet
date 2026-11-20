@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SpecMatch ITAM - Company Staff Directory & Hardware Allocation Audit</title>
+    <title>ITFleet ITAM - Company Staff Directory & Hardware Allocation Audit</title>
     <style>
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -81,7 +81,7 @@
         <table style="width: 100%;">
             <tr>
                 <td>
-                    <div class="title">SpecMatch ITAM — Staff Directory & Hardware Allocation Report</div>
+                    <div class="title">ITFleet ITAM — Staff Directory & Hardware Allocation Report</div>
                     <div class="subtitle">Philippine Enterprise Hardware Optimization & Workforce Asset Tracking</div>
                 </td>
                 <td style="text-align: right; vertical-align: top;">
@@ -126,6 +126,7 @@
             @foreach ($employees as $emp)
                 @php
                     $device = $emp->activeAssignment?->device;
+                    $extraAssetsCount = max(0, $emp->activeAssignments->count() - ($device ? 1 : 0));
                 @endphp
                 <tr>
                     <td><strong>#{{ str_pad($emp->id, 4, '0', STR_PAD_LEFT) }}</strong></td>
@@ -142,9 +143,13 @@
                     </td>
                     <td>
                         @if ($device)
-                            <strong>{{ $device->asset_tag }}</strong> &bull; {{ $device->brand }} {{ $device->model }}<br>
+                            <strong>{{ $device->asset_tag }}</strong> &bull; {{ $device->brand }} {{ $device->model }}
+                            @if ($extraAssetsCount > 0)
+                                <span style="color: #026eff; font-size: 8px;">(+{{ $extraAssetsCount }} more)</span>
+                            @endif
+                            <br>
                             <span style="color: #64748b; font-size: 8px;">
-                                {{ $device->ram_gb }}GB RAM &bull; {{ $device->storage_gb }}GB {{ $device->storage_type }} &bull; {{ ucfirst($device->device_type) }}
+                                {{ $device->spec_summary }} &bull; {{ ucfirst($device->device_type) }}
                             </span>
                         @else
                             <span style="color: #94a3b8; font-style: italic;">No Device Issued</span>
@@ -163,7 +168,7 @@
     </table>
 
     <div class="footer">
-        Generated automatically by SpecMatch Enterprise ITAM Platform &bull; ISO 19770-1 IT Asset Compliance Standard &bull; Page 1 of 1
+        Generated automatically by ITFleet Enterprise ITAM Platform &bull; ISO 19770-1 IT Asset Compliance Standard &bull; Page 1 of 1
     </div>
 </body>
 </html>

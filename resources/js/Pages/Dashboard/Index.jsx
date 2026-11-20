@@ -1,874 +1,668 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import HardwareImage from '@/Components/HardwareImage';
-import SpecMatchMascot from '@/Components/SpecMatchMascot';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
+    RiAddLine,
+    RiAlertLine,
     RiArrowRightLine,
-    RiCheckLine,
-    RiCpuLine,
-    RiExchangeLine,
+    RiCheckboxCircleLine,
+    RiComputerLine,
     RiFlashlightLine,
+    RiKey2Line,
+    RiKeyboardBoxLine,
+    RiMacbookLine,
     RiShieldCheckLine,
-    RiSparklingLine,
-    RiTimeLine,
+    RiSmartphoneLine,
+    RiToolsLine,
+    RiTv2Line,
 } from 'react-icons/ri';
 
 export default function Dashboard({
     metrics = {},
-    mismatches = [],
     recent_assignments = [],
     available_fleet = [],
-    itam = {},
 }) {
     const { auth } = usePage().props;
     const user = auth?.user;
     const isAdminOrManager = ['admin', 'manager'].includes(user?.role);
-    const [activeAiTab, setActiveAiTab] = useState('specs');
+    const canViewFinancials = !metrics?.financials_restricted && user?.role !== 'technician';
 
-    const stageBreakdown = metrics?.stage_breakdown || {
-        acquisition: 0,
-        deployment: metrics?.total_devices || 0,
-        reclaimed: 0,
-        maintenance: metrics?.in_repair_devices || 0,
-        retirement: metrics?.retired_devices || 0,
-    };
+    const [activeTab, setActiveTab] = useState('assignments');
 
-    const fleetRisk = metrics?.fleet_risk || {
-        risk_score: 0,
-        risk_tier: 'Low Risk',
-        status_label: 'Healthy Fleet',
-        factors: { warranty_risk_pct: 0, aging_risk_pct: 0, condition_risk_pct: 0 },
-        counts: { total_active: 0, warranty_at_risk: 0, aging_at_risk: 0, condition_at_risk: 0 },
-        key_alerts: [],
-    };
+    const totalActive = metrics?.total_devices ?? 0;
+    const assignedCount = metrics?.assigned_devices ?? 0;
+    const availableCount = metrics?.idle_devices ?? 0;
+    const inRepairCount = metrics?.in_repair_devices ?? 0;
+    const retiredCount = metrics?.retired_devices ?? 0;
+    const totalInventory = totalActive + retiredCount;
+    const utilizationRate = Number(metrics?.utilization_rate ?? 0);
+
+    const software = metrics?.software_licenses || {};
+    const licenseRenewalsCount = (software.expiring_soon_count ?? 0) + (software.expired_count ?? 0);
+    const warrantyExpiringCount = metrics?.expiring_warranties_count ?? 0;
+    const warrantyExpiredCount = metrics?.expired_warranties_count ?? 0;
+    const warrantyAttentionCount = warrantyExpiringCount + warrantyExpiredCount;
+    const mismatchCount = metrics?.mismatch_count ?? 0;
+    const activeMaintenanceCount = metrics?.active_maintenance_count ?? 0;
+
+    const statusItems = [
+        {
+            key: 'assigned',
+            label: 'Assigned',
+            count: assignedCount,
+            dot: 'bg-emerald-500',
+            bar: 'bg-emerald-500',
+            href: route('devices.index', { status: 'assigned' }),
+        },
+        {
+            key: 'available',
+            label: 'Available',
+            count: availableCount,
+            dot: 'bg-[#026eff]',
+            bar: 'bg-[#026eff]',
+            href: route('devices.index', { status: 'available' }),
+        },
+        {
+            key: 'in_repair',
+            label: 'In Repair',
+            count: inRepairCount,
+            dot: 'bg-amber-500',
+            bar: 'bg-amber-500',
+            href: route('devices.index', { status: 'in_repair' }),
+        },
+        {
+            key: 'retired',
+            label: 'Retired',
+            count: retiredCount,
+            dot: 'bg-zinc-400',
+            bar: 'bg-zinc-400',
+            href: route('devices.index', { status: 'retired' }),
+        },
+    ];
+
+    const categoryItems = [
+        { key: 'laptop', label: 'Laptops', count: metrics?.category_breakdown?.laptop ?? 0, icon: RiMacbookLine },
+        { key: 'desktop', label: 'Desktops', count: metrics?.category_breakdown?.desktop ?? 0, icon: RiComputerLine },
+        { key: 'monitor', label: 'Monitors', count: metrics?.category_breakdown?.monitor ?? 0, icon: RiTv2Line },
+        { key: 'mobile', label: 'Mobiles', count: metrics?.category_breakdown?.mobile ?? 0, icon: RiSmartphoneLine },
+        { key: 'peripheral', label: 'Peripherals', count: metrics?.category_breakdown?.peripheral ?? 0, icon: RiKeyboardBoxLine },
+    ];
+
+    const attentionItems = [
+        {
+            key: 'mismatches',
+            label: 'Role-Hardware Mismatches',
+            count: mismatchCount,
+            description: mismatchCount > 0
+                ? 'Assigned compute units failing workload fit'
+                : 'All active assignments fit role benchmarks',
+            href: route('mismatches.index'),
+            icon: RiAlertLine,
+            activeTone: 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20',
+        },
+        {
+            key: 'warranties',
+            label: 'Hardware Warranties',
+            count: warrantyAttentionCount,
+            description: warrantyAttentionCount > 0
+                ? `${warrantyExpiringCount} expiring ≤60d · ${warrantyExpiredCount} expired`
+                : 'All active hardware under warranty coverage',
+            href: route('devices.index'),
+            icon: RiShieldCheckLine,
+            activeTone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
+        },
+        {
+            key: 'licenses',
+            label: 'Software License Renewals',
+            count: licenseRenewalsCount,
+            description: licenseRenewalsCount > 0
+                ? `${software.expiring_soon_count ?? 0} expiring · ${software.expired_count ?? 0} expired contracts`
+                : 'All active SaaS agreements up to date',
+            href: route('licenses.index'),
+            icon: RiKey2Line,
+            activeTone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
+        },
+        {
+            key: 'maintenance',
+            label: 'Active Repairs & Maintenance',
+            count: activeMaintenanceCount,
+            description: activeMaintenanceCount > 0
+                ? 'Open scheduled or in-progress service logs'
+                : 'No open maintenance or repair tickets',
+            href: route('maintenance.index'),
+            icon: RiToolsLine,
+            activeTone: 'text-[#026eff] dark:text-sky-400 bg-[#026eff]/10 border-[#026eff]/20',
+        },
+    ];
+
+    const activeAttentionCount = attentionItems.filter((item) => item.count > 0).length;
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-sans font-extrabold tracking-tight text-slate-900 dark:text-zinc-100">IT Asset Operations & Intelligence</h1>
-                        <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1 max-w-2xl">
-                            Hardware inventory tracking, straight-line depreciation, lifecycle phases, and smart workload matching.
+                        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                            Asset Operations Overview
+                        </h1>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                            Hardware inventory status, custody activity, software license seats, and compliance queue.
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5 shrink-0">
                         {isAdminOrManager && (
                             <Link
                                 href={route('devices.create')}
-                                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-semibold text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 shadow-xs transition"
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                             >
-                                + Register Asset
+                                <RiAddLine className="w-3.5 h-3.5" />
+                                <span>Register Asset</span>
                             </Link>
                         )}
-                        {isAdminOrManager && (
+                        {isAdminOrManager ? (
                             <Link
                                 href={route('match.index')}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#026eff] text-sm font-semibold text-white hover:bg-[#0256cc] shadow-sm transition"
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] hover:border-[#0258d1] text-xs font-medium text-white transition"
                             >
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                                Run Match Pipeline
+                                <RiFlashlightLine className="w-3.5 h-3.5" />
+                                <span>Run Match Pipeline</span>
                             </Link>
-                        )}
-                        {!isAdminOrManager && (
+                        ) : (
                             <Link
                                 href={route('devices.index')}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#026eff] text-sm font-semibold text-white hover:bg-[#0256cc] shadow-sm transition"
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] hover:border-[#0258d1] text-xs font-medium text-white transition"
                             >
-                                View Fleet Inventory
+                                <span>View Fleet Inventory</span>
                             </Link>
                         )}
                     </div>
                 </div>
             }
         >
-            <Head title="ITAM Operations Dashboard - SpecMatch" />
+            <Head title="Asset Operations Overview - ITFleet" />
 
-            {/* Lifecycle Stages Ribbon */}
-            <div className="mb-6 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 p-6 shadow-xs">
-                <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Fleet Lifecycle Phase Distribution</span>
-                    <span className="text-xs text-slate-400 dark:text-zinc-500">Total Authoritative Inventory: {(metrics?.total_devices ?? 0) + (metrics?.retired_devices ?? 0)} Units</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                    <div className="p-3 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/50 flex items-center justify-between">
+            <div className="space-y-5">
+                {/* 1. Core Operational KPI Strip */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white dark:bg-zinc-900 rounded-sm p-5 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between">
                         <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400 block">1. Acquisition</span>
-                            <span className="text-xl font-black text-sky-950 dark:text-sky-200 mt-0.5 block">{stageBreakdown.acquisition || 0}</span>
-                            <span className="text-[11px] text-sky-600 dark:text-sky-400/80">Procurement & Staging</span>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                    Total Hardware Assets
+                                </span>
+                                {retiredCount > 0 && (
+                                    <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 tabular-nums">
+                                        {retiredCount} retired
+                                    </span>
+                                )}
+                            </div>
+                            <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">
+                                {totalActive}
+                            </div>
                         </div>
-                        <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400 text-[10px] font-bold shadow-xs"><span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>NEW</span>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-between">
-                        <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">2. Deployment</span>
-                            <span className="text-xl font-black text-emerald-950 dark:text-emerald-200 mt-0.5 block">{stageBreakdown.deployment || 0}</span>
-                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400/80">In Active Circulation</span>
-                        </div>
-                        <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400 text-[10px] font-bold shadow-xs"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>LIVE</span>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-100 dark:border-teal-900/50 flex items-center justify-between">
-                        <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 block">3. Reclaimed</span>
-                            <span className="text-xl font-black text-teal-950 dark:text-teal-200 mt-0.5 block">{stageBreakdown.reclaimed || 0}</span>
-                            <span className="text-[11px] text-teal-600 dark:text-teal-400/80">Sanitized in Pool</span>
-                        </div>
-                        <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400 text-[10px] font-bold shadow-xs"><span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>POOL</span>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50 flex items-center justify-between">
-                        <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 block">4. Maintenance</span>
-                            <span className="text-xl font-black text-amber-950 dark:text-amber-200 mt-0.5 block">{stageBreakdown.maintenance || 0}</span>
-                            <span className="text-[11px] text-amber-600 dark:text-amber-400/80">Repair & Servicing</span>
-                        </div>
-                        <Link href={route('maintenance.index')} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400 text-[10px] font-bold shadow-xs hover:bg-slate-50 dark:hover:bg-zinc-700 transition">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>LOGS
-                        </Link>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/60 flex items-center justify-between">
-                        <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 block">5. Retirement</span>
-                            <span className="text-xl font-black text-slate-800 dark:text-zinc-200 mt-0.5 block">{stageBreakdown.retirement || 0}</span>
-                            <span className="text-[11px] text-slate-500 dark:text-zinc-500">Decommissioned / EOL</span>
-                        </div>
-                        <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400 text-[10px] font-bold shadow-xs"><span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>EOL</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Financial Tracking & Capital Valuation Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-                {/* Initial Capital Invested */}
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200/80 dark:border-zinc-800 shadow-xs relative overflow-hidden">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Fleet Acquisition Spend</span>
-                        <span className="p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </span>
-                    </div>
-                    <div className="mt-4 flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-zinc-100">
-                            ₱{Number(metrics?.total_acquisition_cost || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                    </div>
-                    <p className="mt-3 text-xs text-slate-500 dark:text-zinc-400">
-                        Total capital invested in active computer fleet.
-                    </p>
-                </div>
-
-                {/* Depreciated Residual Book Value */}
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200/80 dark:border-zinc-800 shadow-xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Residual Book Value</span>
-                        <span className="p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                        </span>
-                    </div>
-                    <div className="mt-4 flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-zinc-100">
-                            ₱{Number(metrics?.current_book_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                    </div>
-                    <p className="mt-3 text-xs text-slate-500 dark:text-zinc-400">
-                        Depreciated straight-line asset balance across operational lifespan.
-                    </p>
-                </div>
-
-                {/* Maintenance Spend & Servicing */}
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200/80 dark:border-zinc-800 shadow-xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Maintenance & Servicing</span>
-                        <span className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                        </span>
-                    </div>
-                    <div className="mt-4 flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-zinc-100">
-                            ₱{Number(metrics?.total_maintenance_spend || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                    </div>
-                    <div className="mt-3 text-xs text-slate-500 dark:text-zinc-400 flex items-center justify-between">
-                        <span className="font-semibold text-amber-700 dark:text-amber-400">{metrics?.active_maintenance_count ?? 0} in servicing</span>
-                        <Link href={route('maintenance.index')} className="text-[#026eff] dark:text-[#0b79ff] font-semibold hover:underline">
-                            Open Hub
-                        </Link>
-                    </div>
-                </div>
-
-                {/* Procurement Avoidance Savings */}
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200/80 dark:border-zinc-800 shadow-xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Procurement Avoidance</span>
-                        <span className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                            </svg>
-                        </span>
-                    </div>
-                    <div className="mt-4 flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                            ₱{Number(metrics?.procurement_savings ?? 0).toLocaleString()}
-                        </span>
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded">Saved</span>
-                    </div>
-                    <p className="mt-3 text-xs text-slate-500 dark:text-zinc-400">
-                        Capital saved by matching idle fleet vs purchasing new units.
-                    </p>
-                </div>
-            </div>
-
-            {/* Fleet Operational Risk & Health Index */}
-            <div className="mb-8 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 p-6 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 border-b border-slate-100 dark:border-zinc-800">
-                    <div>
-                        <div className="flex items-center gap-2.5">
-                            <span className="p-1.5 rounded-lg bg-[#026eff]/10 text-[#026eff] dark:text-[#0b79ff]">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
-                            </span>
-                            <h3 className="font-bold text-slate-900 dark:text-zinc-100 text-lg">
-                                Fleet Operational Risk & Health Index
-                            </h3>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-                            Weighted composite reliability index evaluating warranty coverage (35%), asset age &ge; 3yrs (35%), and maintenance/hardware condition (30%).
+                        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
+                            {assignedCount} assigned &middot; {availableCount} available &middot; {inRepairCount} in repair
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            fleetRisk.risk_score <= 25 ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
-                            fleetRisk.risk_score <= 55 ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800' :
-                            'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                        }`}>
-                            {fleetRisk.risk_tier}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-600 dark:text-zinc-300">
-                            {fleetRisk.status_label}
-                        </span>
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5">
-                    {/* Left Column: Composite Risk Score Gauge */}
-                    <div className="lg:col-span-4 flex flex-col justify-between p-5 rounded-xl bg-slate-50/70 dark:bg-zinc-800/40 border border-slate-200/60 dark:border-zinc-700/60">
+                    <div className="bg-white dark:bg-zinc-900 rounded-sm p-5 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between">
                         <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                                Composite Fleet Risk Rating
+                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                Deployment &amp; Stockroom
                             </span>
-                            <div className="mt-3 flex items-baseline gap-2">
-                                <span className={`text-4xl font-black ${
-                                    fleetRisk.risk_score <= 25 ? 'text-emerald-600 dark:text-emerald-400' :
-                                    fleetRisk.risk_score <= 55 ? 'text-amber-600 dark:text-amber-400' :
-                                    'text-rose-600 dark:text-rose-400'
-                                }`}>
-                                    {fleetRisk.risk_score}
+                            <div className="mt-2 flex items-baseline justify-between gap-2">
+                                <span className="text-2xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">
+                                    {utilizationRate}%
                                 </span>
-                                <span className="text-sm font-semibold text-slate-400 dark:text-zinc-500">/ 100 Risk Index</span>
-                            </div>
-
-                            {/* Visual Bar Gauge */}
-                            <div className="mt-3 w-full bg-slate-200 dark:bg-zinc-700 h-2.5 rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full rounded-full transition-all duration-500 ${
-                                        fleetRisk.risk_score <= 25 ? 'bg-emerald-500' :
-                                        fleetRisk.risk_score <= 55 ? 'bg-amber-500' :
-                                        'bg-rose-500'
-                                    }`}
-                                    style={{ width: `${Math.max(5, Math.min(100, fleetRisk.risk_score))}%` }}
-                                />
-                            </div>
-                            <div className="flex justify-between text-[10px] text-slate-400 dark:text-zinc-500 mt-1 font-mono">
-                                <span>0 (Optimum)</span>
-                                <span>50 (Moderate)</span>
-                                <span>100 (Critical)</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-zinc-700/60 text-xs text-slate-500 dark:text-zinc-400">
-                            <span>Active Tracked Devices: </span>
-                            <strong className="text-slate-800 dark:text-zinc-200">{fleetRisk.counts?.total_active || 0} units</strong>
-                        </div>
-                    </div>
-
-                    {/* Middle Column: 3 Weighted Factors */}
-                    <div className="lg:col-span-4 space-y-3.5">
-                        {/* Warranty Exposure (35%) */}
-                        <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-800/30">
-                            <div className="flex items-center justify-between text-xs mb-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                    <span className="font-semibold text-slate-800 dark:text-zinc-200">Warranty Exposure</span>
-                                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">(35% weight)</span>
-                                </div>
-                                <span className="font-mono font-bold text-slate-900 dark:text-zinc-100">
-                                    {fleetRisk.factors?.warranty_risk_pct ?? 0}%
+                                <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                    deployed
                                 </span>
                             </div>
-                            <div className="w-full bg-slate-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
+                            <div className="mt-2.5 w-full h-1.5 rounded-sm bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
                                 <div
-                                    className="bg-amber-500 h-full rounded-full transition-all"
-                                    style={{ width: `${Math.min(100, fleetRisk.factors?.warranty_risk_pct ?? 0)}%` }}
+                                    className="h-full rounded-sm bg-[#026eff] transition-all duration-300"
+                                    style={{ width: `${Math.max(0, Math.min(100, utilizationRate))}%` }}
                                 />
                             </div>
-                            <div className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                                {fleetRisk.counts?.warranty_at_risk ?? 0} units expired or expiring in &le; 60 days
-                            </div>
                         </div>
-
-                        {/* Hardware Aging >= 3 Years (35%) */}
-                        <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-800/30">
-                            <div className="flex items-center justify-between text-xs mb-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-sky-500"></span>
-                                    <span className="font-semibold text-slate-800 dark:text-zinc-200">Hardware Aging (&ge; 3 Yrs)</span>
-                                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">(35% weight)</span>
-                                </div>
-                                <span className="font-mono font-bold text-slate-900 dark:text-zinc-100">
-                                    {fleetRisk.factors?.aging_risk_pct ?? 0}%
-                                </span>
-                            </div>
-                            <div className="w-full bg-slate-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
-                                <div
-                                    className="bg-sky-500 h-full rounded-full transition-all"
-                                    style={{ width: `${Math.min(100, fleetRisk.factors?.aging_risk_pct ?? 0)}%` }}
-                                />
-                            </div>
-                            <div className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                                {fleetRisk.counts?.aging_at_risk ?? 0} units nearing economic end-of-life
-                            </div>
-                        </div>
-
-                        {/* Condition / Maintenance (30%) */}
-                        <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-800/30">
-                            <div className="flex items-center justify-between text-xs mb-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                                    <span className="font-semibold text-slate-800 dark:text-zinc-200">Degraded Condition / Repair</span>
-                                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">(30% weight)</span>
-                                </div>
-                                <span className="font-mono font-bold text-slate-900 dark:text-zinc-100">
-                                    {fleetRisk.factors?.condition_risk_pct ?? 0}%
-                                </span>
-                            </div>
-                            <div className="w-full bg-slate-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
-                                <div
-                                    className="bg-rose-500 h-full rounded-full transition-all"
-                                    style={{ width: `${Math.min(100, fleetRisk.factors?.condition_risk_pct ?? 0)}%` }}
-                                />
-                            </div>
-                            <div className="mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
-                                {fleetRisk.counts?.condition_at_risk ?? 0} units in repair or degraded condition
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Column: Key Alerts & Proactive Mitigation */}
-                    <div className="lg:col-span-4 flex flex-col justify-between p-4 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-slate-50/40 dark:bg-zinc-800/30">
-                        <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block mb-2">
-                                Actionable Risk Insights
+                        <div className="mt-3 flex items-center justify-between text-xs">
+                            <span className="text-zinc-500 dark:text-zinc-400 tabular-nums">
+                                {availableCount} ready in stockroom
                             </span>
-                            <ul className="space-y-2 text-xs">
-                                {(fleetRisk.key_alerts || []).map((alert, idx) => (
-                                    <li key={idx} className="flex items-start gap-2 text-slate-700 dark:text-zinc-300">
-                                        <span className="text-amber-500 shrink-0 mt-0.5">&bull;</span>
-                                        <span>{alert}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                        <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-zinc-800 flex items-center justify-between">
-                            <span className="text-[11px] text-slate-400 dark:text-zinc-500">Autonomous Fleet Scoring</span>
                             <Link
-                                href={route('devices.index')}
-                                className="text-xs font-semibold text-[#026eff] dark:text-[#0b79ff] hover:underline"
+                                href={route('devices.index', { status: 'available' })}
+                                className="text-[#026eff] dark:text-sky-400 font-medium hover:underline"
                             >
-                                Audit Fleet &rarr;
+                                Pool &rarr;
                             </Link>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Critical ITAM Alerts Banner Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                {/* Warranty Alert */}
-                {(metrics?.expiring_warranties_count ?? 0) > 0 && (
-                    <div className="rounded-2xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-900/60 p-5 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-slate-900 dark:text-zinc-100 text-sm">
-                                    {metrics?.expiring_warranties_count ?? 0} Warranties Expiring Soon (&le; 60 Days)
-                                </h4>
-                                <p className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
-                                    Service contracts approaching expiration. Review extended coverage options.
-                                </p>
-                            </div>
-                        </div>
-                        <Link
-                            href={route('devices.index')}
-                            className="px-3 py-1.5 rounded-lg border border-amber-600 dark:border-amber-500 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-50 dark:hover:bg-amber-950/30 shrink-0 transition"
-                        >
-                            View Assets
-                        </Link>
-                    </div>
-                )}
-
-                {/* Redundancy / Efficiency Optimization Alert */}
-                {(metrics?.idle_high_spec_count ?? 0) > 0 && (
-                    <div className="rounded-2xl bg-[#026eff]/10 dark:bg-[#031a40]/20 border border-[#026eff]/20 dark:border-[#031a40]/60 p-5 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-[#026eff] text-white shrink-0">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-slate-900 dark:text-zinc-100 text-sm">
-                                    {metrics?.idle_high_spec_count ?? 0} Redundant High-Spec Assets Available
-                                </h4>
-                                <p className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
-                                    High-performance machines currently idle. Optimize fleet efficiency before procuring.
-                                </p>
-                            </div>
-                        </div>
-                        <Link
-                            href={isAdminOrManager ? route('match.index') : route('devices.index')}
-                            className="px-3 py-1.5 rounded-lg border border-[#026eff] text-[#026eff] dark:text-[#0b79ff] text-xs font-bold hover:bg-[#026eff]/10 shrink-0 transition"
-                        >
-                            {isAdminOrManager ? 'Assign Assets' : 'View Assets'}
-                        </Link>
-                    </div>
-                )}
-            </div>
-
-            {/* Mismatch Alert Banner */}
-            {(metrics?.mismatch_count ?? 0) > 0 && (
-                <div className="mb-8 rounded-2xl bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 dark:from-amber-950/20 dark:via-rose-950/20 dark:to-amber-950/20 border border-amber-300 dark:border-amber-900/60 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3.5">
-                        <div className="p-2 rounded-xl bg-amber-500 text-white shadow-sm shrink-0">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
+                    <div className="bg-white dark:bg-zinc-900 rounded-sm p-5 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between">
                         <div>
-                            <h3 className="font-bold text-slate-900 dark:text-zinc-100 text-base">
-                                {metrics?.mismatch_count ?? 0} Active Assignment Mismatches Detected
-                            </h3>
-                            <p className="text-sm text-slate-600 dark:text-zinc-400 mt-0.5">
-                                Devices currently assigned fail workload benchmarks (under-provisioned or over-allocated waste).
+                            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                Software &amp; SaaS Seats
+                            </span>
+                            <div className="mt-2 flex items-baseline justify-between gap-2">
+                                <span className="text-2xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">
+                                    {software.assigned_seats ?? 0} / {software.total_seats ?? 0}
+                                </span>
+                                <span className="text-[11px] font-medium text-[#026eff] dark:text-sky-400 tabular-nums">
+                                    {software.seat_utilization_pct ?? 0}% used
+                                </span>
+                            </div>
+                        </div>
+                        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums truncate">
+                            {canViewFinancials
+                                ? `₱${Number(software.annual_software_spend || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}/yr · ${software.active_licenses ?? 0} licenses`
+                                : `${software.available_seats ?? 0} seats available · ${software.active_licenses ?? 0} active contracts`}
+                        </p>
+                    </div>
+
+                    {canViewFinancials ? (
+                        <div className="bg-white dark:bg-zinc-900 rounded-sm p-5 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between">
+                            <div>
+                                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                    Net Book Value
+                                </span>
+                                <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">
+                                    ₱{Number(metrics?.current_book_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </div>
+                            </div>
+                            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums truncate">
+                                ₱{Number(metrics?.total_acquisition_cost || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} acquisition cost
                             </p>
                         </div>
-                    </div>
-                    <Link
-                        href={route('mismatches.index')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-amber-600 dark:border-amber-500 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-50 dark:hover:bg-amber-950/30 transition shrink-0 self-start md:self-auto group"
-                    >
-                        <span>Review Mismatches</span>
-                        <svg className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                        </svg>
-                    </Link>
-                </div>
-            )}
-
-            {/* Quick Actions & Available Fleet */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                {/* Available Devices Snapshot */}
-                <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 p-6 shadow-xs">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="font-bold text-slate-900 dark:text-zinc-100 text-lg">Available Fleet for Assignment</h2>
-                            <p className="text-xs text-slate-500 dark:text-zinc-400">Currently idle units ready to be circulation-matched</p>
-                        </div>
-                        <Link href={route('devices.index', { status: 'available' })} className="text-xs font-semibold text-[#026eff] dark:text-[#0b79ff] hover:underline">
-                            View All Available ({metrics?.idle_devices ?? 0})
-                        </Link>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {(!available_fleet || available_fleet.length === 0) ? (
-                            <div className="col-span-full py-12 text-center text-slate-400 dark:text-zinc-500 rounded-xl bg-slate-50/50 dark:bg-zinc-800/30 border border-dashed border-slate-200 dark:border-zinc-700 text-xs">
-                                No idle devices currently available in pool.
+                    ) : (
+                        <div className="bg-white dark:bg-zinc-900 rounded-sm p-5 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between">
+                            <div>
+                                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                    Maintenance &amp; Repairs
+                                </span>
+                                <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">
+                                    {activeMaintenanceCount} Active
+                                </div>
                             </div>
-                        ) : (
-                            available_fleet.map((device) => (
-                                <div key={device.id} className="p-4 rounded-xl border border-slate-200/80 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/40 hover:bg-slate-50 dark:hover:bg-zinc-800/70 transition flex flex-col justify-between">
-                                    <div>
-                                        <div className="flex items-start gap-3">
-                                            <div className="w-14 h-14 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 shrink-0 overflow-hidden shadow-xs">
-                                                <HardwareImage
-                                                    src={device.image_clip_url || device.image_url}
-                                                    alt={`${device.brand} ${device.model}`}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center justify-between gap-1">
-                                                    <span className="text-xs font-mono font-bold text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 px-2 py-0.5 rounded border border-slate-200 dark:border-zinc-700">
-                                                        {device.asset_tag}
+                            <div className="mt-3 flex items-center justify-between text-xs">
+                                <span className="text-zinc-500 dark:text-zinc-400 tabular-nums">
+                                    {inRepairCount} units in servicing
+                                </span>
+                                <Link
+                                    href={route('maintenance.index')}
+                                    className="text-[#026eff] dark:text-sky-400 font-medium hover:underline"
+                                >
+                                    Queue &rarr;
+                                </Link>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* 2. Two-Column Operational Overview */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* Left: Unified Hardware Inventory by Status & Category */}
+                    <div className="lg:col-span-7 bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 p-5 flex flex-col justify-between gap-5">
+                        <div>
+                            <div className="flex items-center justify-between gap-2 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                                <div>
+                                    <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                        Hardware Inventory by Status &amp; Category
+                                    </h2>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                        Live distribution across {totalInventory} tracked hardware records
+                                    </p>
+                                </div>
+                                <Link
+                                    href={route('devices.index')}
+                                    className="text-xs font-medium text-[#026eff] dark:text-sky-400 hover:underline shrink-0"
+                                >
+                                    Full Catalog &rarr;
+                                </Link>
+                            </div>
+
+                            {/* Status Stacked Bar + Clickable Summary Strip */}
+                            <div className="mt-4">
+                                <div className="w-full h-2 rounded-sm bg-zinc-100 dark:bg-zinc-800 overflow-hidden flex gap-0.5">
+                                    {statusItems.map((status) =>
+                                        status.count > 0 ? (
+                                            <div
+                                                key={status.key}
+                                                className={`${status.bar} h-full transition-all duration-300`}
+                                                style={{ width: `${(status.count / (totalInventory || 1)) * 100}%` }}
+                                                title={`${status.label}: ${status.count}`}
+                                            />
+                                        ) : null
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3">
+                                    {statusItems.map((status) => {
+                                        const pct = totalInventory > 0 ? Math.round((status.count / totalInventory) * 100) : 0;
+
+                                        return (
+                                            <Link
+                                                key={status.key}
+                                                href={status.href}
+                                                className="px-3 py-2.5 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/30 hover:border-[#026eff] transition"
+                                            >
+                                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                                                    <span className={`w-1.5 h-1.5 rounded-sm shrink-0 ${status.dot}`} />
+                                                    <span className="truncate">{status.label}</span>
+                                                </div>
+                                                <div className="mt-1 flex items-baseline justify-between gap-2">
+                                                    <span className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+                                                        {status.count}
                                                     </span>
-                                                    <span className="text-[10px] uppercase font-bold tracking-wide text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
-                                                        {device.status}
+                                                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                                                        {pct}%
                                                     </span>
                                                 </div>
-                                                <h4 className="font-bold text-slate-900 dark:text-zinc-100 mt-1.5 text-sm truncate">{device.brand} {device.model}</h4>
-                                                <p className="text-xs text-slate-500 dark:text-zinc-400 truncate">{device.cpu}</p>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Active Hardware Category Breakdown */}
+                        <div>
+                            <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2.5">
+                                Active Hardware Categories ({totalActive} units)
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                                {categoryItems.map((cat) => {
+                                    const IconComponent = cat.icon;
+                                    const sharePct = totalActive > 0 ? Math.round((cat.count / totalActive) * 100) : 0;
+
+                                    return (
+                                        <Link
+                                            key={cat.key}
+                                            href={route('devices.index', { device_type: cat.key })}
+                                            className="p-3 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-[#026eff] transition flex flex-col justify-between gap-2"
+                                        >
+                                            <div className="flex items-center justify-between gap-1 text-zinc-500 dark:text-zinc-400">
+                                                <IconComponent className="w-4 h-4 shrink-0" />
+                                                <span className="text-[10px] tabular-nums">{sharePct}%</span>
+                                            </div>
+                                            <div>
+                                                <div className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 leading-none">
+                                                    {cat.count}
+                                                </div>
+                                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 truncate">
+                                                    {cat.label}
+                                                </div>
+                                            </div>
+                                            <div className="w-full h-1 rounded-sm bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                                                <div
+                                                    className="h-full bg-[#026eff]/80 rounded-sm"
+                                                    style={{ width: `${Math.min(100, sharePct)}%` }}
+                                                />
+                                            </div>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right: Needs Attention Action Queue */}
+                    <div className="lg:col-span-5 bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 p-5 flex flex-col">
+                        <div className="flex items-center justify-between gap-2 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                            <div>
+                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                    Needs Attention
+                                </h2>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                    Actionable compliance &amp; lifecycle items
+                                </p>
+                            </div>
+                            {activeAttentionCount === 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-emerald-500/20 bg-emerald-500/10 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 shrink-0">
+                                    <RiCheckboxCircleLine className="w-3.5 h-3.5" />
+                                    All Clear
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-sm border border-amber-500/20 bg-amber-500/10 text-[11px] font-medium text-amber-700 dark:text-amber-400 tabular-nums shrink-0">
+                                    {activeAttentionCount} Active
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800/80 flex-1 flex flex-col justify-between">
+                            {attentionItems.map((item) => {
+                                const IconComponent = item.icon;
+                                const hasIssues = item.count > 0;
+
+                                return (
+                                    <Link
+                                        key={item.key}
+                                        href={item.href}
+                                        className="py-3 first:pt-1 last:pb-1 flex items-center justify-between gap-3 group"
+                                    >
+                                        <div className="flex items-start gap-3 min-w-0">
+                                            <div className={`w-8 h-8 rounded-sm border flex items-center justify-center shrink-0 ${
+                                                hasIssues
+                                                    ? item.activeTone
+                                                    : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700 text-zinc-400 dark:text-zinc-500'
+                                            }`}>
+                                                <IconComponent className="w-4 h-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-[#026eff] dark:group-hover:text-sky-400 transition truncate">
+                                                    {item.label}
+                                                </div>
+                                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                                                    {item.description}
+                                                </p>
                                             </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-1.5 mt-3">
-                                            <span className="text-[11px] px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 font-medium text-slate-700 dark:text-zinc-300">
-                                                {device.ram_gb}GB RAM
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className={`px-2 py-0.5 rounded-sm border text-xs font-semibold tabular-nums ${
+                                                hasIssues
+                                                    ? item.activeTone
+                                                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                                            }`}>
+                                                {item.count}
                                             </span>
-                                            <span className="text-[11px] px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 font-medium text-slate-700 dark:text-zinc-300">
-                                                {device.storage_gb}GB {device.storage_type}
-                                            </span>
-                                            <span className="text-[11px] px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 font-medium text-slate-700 dark:text-zinc-300 capitalize">
-                                                {device.cpu_tier} CPU
-                                            </span>
-                                            {device.gpu_tier !== 'none' && (
-                                                <span className="text-[11px] px-2 py-0.5 rounded bg-[#026eff]/10 dark:bg-[#031a40]/60 border border-[#026eff]/15 dark:border-[#031a40]/50 font-medium text-[#026eff] dark:text-[#0b79ff]">
-                                                    {device.gpu_tier}
-                                                </span>
-                                            )}
+                                            <RiArrowRightLine className="w-3.5 h-3.5 text-zinc-400 group-hover:text-[#026eff] group-hover:translate-x-0.5 transition-all" />
                                         </div>
-                                    </div>
-                                    <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-zinc-800 flex items-center justify-between text-xs">
-                                        <span className="text-slate-400 dark:text-zinc-500 capitalize">{device.device_type} &bull; {device.condition}</span>
-                                        <Link href={route('devices.show', device.id)} className="font-semibold text-[#026eff] dark:text-[#0b79ff] hover:text-[#026eff] dark:hover:text-[#0b79ff]">
-                                            Details
-                                        </Link>
-                                    </div>
-                                </div>
-                            ))
-                        )}
+                                    </Link>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
-                {/* Gemini AI & Smart Match Operations Card */}
-                <div className="bg-gradient-to-br from-[#05193F] via-[#021230] to-[#010b1a] dark:from-zinc-950 dark:via-zinc-900 dark:to-[#021230] text-white rounded-2xl p-6 shadow-lg border border-[#026eff]/30 dark:border-zinc-800 flex flex-col justify-between relative overflow-hidden">
-                    {/* Background ambient radial glows */}
-                    <div className="absolute -top-20 -right-20 w-60 h-60 bg-[#026eff]/15 rounded-full blur-3xl pointer-events-none" />
-                    <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-                    <div>
-                        {/* Header: Status & Mascot */}
-                        <div className="flex items-start justify-between gap-3 mb-4 relative z-10">
-                            <div className="space-y-1.5">
-                                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-mono font-medium text-emerald-300">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                                    <span>Gemini 3.1 Flash-Lite Active</span>
-                                </div>
-                                <h3 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                                    <RiSparklingLine className="w-5 h-5 text-[#0b79ff]" />
-                                    SpecMatch AI & Match Deck
-                                </h3>
-                            </div>
-                            <div className="relative group shrink-0">
-                                <SpecMatchMascot
-                                    pose="active"
-                                    variant="avatar"
-                                    size={46}
-                                    showGlow={true}
-                                    isOnline={true}
-                                />
-                            </div>
-                        </div>
-
-                        <p className="text-xs text-sky-100/75 leading-relaxed relative z-10">
-                            Continuous IT asset management with Gemini 3.1 Flash-Lite neural hardware extraction, straight-line depreciation engine, and workload matching.
-                        </p>
-
-                        {/* Interactive Feature Tabs */}
-                        <div className="mt-5 grid grid-cols-3 gap-1 p-1 bg-white/5 dark:bg-black/30 rounded-xl border border-white/10 relative z-10">
+                {/* 3. Tabbed Custody Activity & Ready-to-Deploy Stockroom Table */}
+                <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-1 p-1 rounded-sm bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 w-fit">
                             <button
                                 type="button"
-                                onClick={() => setActiveAiTab('specs')}
-                                className={`flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-semibold rounded-lg transition-all ${
-                                    activeAiTab === 'specs'
-                                        ? 'bg-[#026eff] text-white shadow-sm shadow-[#026eff]/50'
-                                        : 'text-slate-300 hover:text-white hover:bg-white/5'
+                                onClick={() => setActiveTab('assignments')}
+                                className={`px-3 py-1.5 rounded-sm text-xs font-medium transition cursor-pointer ${
+                                    activeTab === 'assignments'
+                                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                                 }`}
                             >
-                                <RiCpuLine className="w-3.5 h-3.5" />
-                                <span>AI Specs</span>
+                                Recent Assignments
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setActiveAiTab('lifecycle')}
-                                className={`flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-semibold rounded-lg transition-all ${
-                                    activeAiTab === 'lifecycle'
-                                        ? 'bg-[#026eff] text-white shadow-sm shadow-[#026eff]/50'
-                                        : 'text-slate-300 hover:text-white hover:bg-white/5'
+                                onClick={() => setActiveTab('available')}
+                                className={`px-3 py-1.5 rounded-sm text-xs font-medium transition cursor-pointer tabular-nums ${
+                                    activeTab === 'available'
+                                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                                 }`}
                             >
-                                <RiTimeLine className="w-3.5 h-3.5" />
-                                <span>Lifecycle</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setActiveAiTab('match')}
-                                className={`flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-semibold rounded-lg transition-all ${
-                                    activeAiTab === 'match'
-                                        ? 'bg-[#026eff] text-white shadow-sm shadow-[#026eff]/50'
-                                        : 'text-slate-300 hover:text-white hover:bg-white/5'
-                                }`}
-                            >
-                                <RiExchangeLine className="w-3.5 h-3.5" />
-                                <span>Smart Match</span>
+                                Ready to Deploy ({availableCount})
                             </button>
                         </div>
 
-                        {/* Tab Content Panels */}
-                        <div className="mt-4 relative z-10">
-                            {activeAiTab === 'specs' && (
-                                <div className="space-y-2.5">
-                                    <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-sky-200">
-                                        <div className="flex items-center justify-between font-semibold text-white mb-1">
-                                            <span className="flex items-center gap-1.5">
-                                                <RiCpuLine className="text-[#0b79ff]" />
-                                                Multi-Architecture Grounding
-                                            </span>
-                                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                                                ARM64 & x86_64
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-300 leading-relaxed">
-                                            Identifies Snapdragon X Copilot+ laptops, Chromebooks, Core Ultra Series 2, Ryzen AI, Mini PCs, and Apple Silicon.
-                                        </p>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/10">
-                                            <span className="text-slate-400 block text-[10px] uppercase font-mono">Vision & Search</span>
-                                            <span className="text-slate-200 font-medium">Local + Google Images</span>
-                                        </div>
-                                        <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/10">
-                                            <span className="text-slate-400 block text-[10px] uppercase font-mono">Parsing Mode</span>
-                                            <span className="text-emerald-400 font-medium font-mono">JSON Grounded</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-2.5 rounded-lg bg-[#026eff]/10 border border-[#026eff]/20 text-[11px] text-sky-200 flex items-center justify-between">
-                                        <span className="flex items-center gap-1.5">
-                                            <RiCheckLine className="text-emerald-400" />
-                                            Zero-Prompt Autofill in Fleet Entry
-                                        </span>
-                                        <span className="text-[10px] font-mono text-[#0b79ff]">1-Click</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeAiTab === 'lifecycle' && (
-                                <div className="space-y-2.5">
-                                    <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
-                                        <div className="flex items-center justify-between font-semibold text-white mb-1">
-                                            <span className="flex items-center gap-1.5">
-                                                <RiTimeLine className="text-amber-400" />
-                                                Straight-Line Depreciation
-                                            </span>
-                                            <span className="text-[10px] font-mono text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded-full">
-                                                5 Stages
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-300 leading-relaxed">
-                                            Continuous valuation based on useful life (3–5 yrs) and salvage floors across the enterprise fleet.
-                                        </p>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/10">
-                                            <span className="text-slate-400 block text-[10px] uppercase font-mono">Fleet Book Value</span>
-                                            <span className="text-emerald-400 font-bold font-mono text-xs">
-                                                ₱{Number(metrics?.current_book_value || 0).toLocaleString()}
-                                            </span>
-                                        </div>
-                                        <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/10">
-                                            <span className="text-slate-400 block text-[10px] uppercase font-mono">Depreciation</span>
-                                            <span className="text-amber-300 font-bold font-mono text-xs">
-                                                ₱{Number(metrics?.total_depreciation || 0).toLocaleString()}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between text-[11px] p-2.5 rounded-lg bg-white/[0.03] border border-white/10 text-slate-300">
-                                        <span>Active In-Repair Units</span>
-                                        <span className="font-semibold text-white">{metrics?.in_repair_devices ?? 0} units</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeAiTab === 'match' && (
-                                <div className="space-y-2.5">
-                                    <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
-                                        <div className="flex items-center justify-between font-semibold text-white mb-1">
-                                            <span className="flex items-center gap-1.5">
-                                                <RiExchangeLine className="text-[#0b79ff]" />
-                                                Role Fit Intelligence
-                                            </span>
-                                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                                                {metrics?.utilization_rate ?? 0}% Utilized
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-300 leading-relaxed">
-                                            Multi-variable matrix matching CPU tiers, RAM capacity, and GPU acceleration against job archetypes.
-                                        </p>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                                        <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/10">
-                                            <span className="text-slate-400 block text-[10px] uppercase font-mono">Procurement Saved</span>
-                                            <span className="text-emerald-400 font-bold font-mono text-xs">
-                                                ₱{Number(metrics?.procurement_savings ?? 0).toLocaleString()}
-                                            </span>
-                                        </div>
-                                        <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/10">
-                                            <span className="text-slate-400 block text-[10px] uppercase font-mono">Flagged Mismatches</span>
-                                            <span className={`font-bold font-mono text-xs ${metrics?.mismatch_count > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                                {metrics?.mismatch_count ?? 0} alerts
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between text-[11px] p-2.5 rounded-lg bg-white/[0.03] border border-white/10 text-slate-300">
-                                        <span>Idle High-Spec Hardware</span>
-                                        <span className="font-semibold text-white">{metrics?.idle_high_spec_count ?? 0} ready to reassign</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Bottom Action Deck */}
-                    <div className="mt-6 pt-4 border-t border-white/10 relative z-10 flex flex-col sm:flex-row gap-2.5">
-                        {isAdminOrManager ? (
-                            <>
-                                <Link
-                                    href={route('devices.create')}
-                                    className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#026eff] to-[#0156c7] hover:from-[#0b79ff] hover:to-[#026eff] text-white font-bold text-center text-xs shadow-md shadow-[#026eff]/25 flex items-center justify-center gap-1.5 transition"
-                                >
-                                    <RiFlashlightLine className="w-4 h-4" />
-                                    <span>AI Asset Intake</span>
-                                </Link>
-                                <Link
-                                    href={route('match.index')}
-                                    className="flex-1 py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-semibold text-center text-xs flex items-center justify-center gap-1.5 transition"
-                                >
-                                    <RiExchangeLine className="w-4 h-4" />
-                                    <span>Match Engine</span>
-                                </Link>
-                            </>
+                        {activeTab === 'assignments' ? (
+                            <Link
+                                href={route('employees.index')}
+                                className="text-xs font-medium text-[#026eff] dark:text-sky-400 hover:underline shrink-0"
+                            >
+                                View All Employees &rarr;
+                            </Link>
                         ) : (
                             <Link
-                                href={route('devices.index')}
-                                className="w-full py-2.5 px-4 rounded-xl bg-white text-[#031a40] font-bold text-center text-xs hover:bg-slate-100 transition shadow-sm flex items-center justify-center gap-2"
+                                href={route('devices.index', { status: 'available' })}
+                                className="text-xs font-medium text-[#026eff] dark:text-sky-400 hover:underline shrink-0"
                             >
-                                <span>Explore Fleet Inventory</span>
-                                <RiArrowRightLine className="w-4 h-4" />
+                                View All Available ({availableCount}) &rarr;
                             </Link>
                         )}
                     </div>
-                </div>
-            </div>
 
-            {/* Recent Assignments Table */}
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 p-6 shadow-xs">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 className="font-bold text-slate-900 dark:text-zinc-100 text-lg">Recent Fleet Assignments</h2>
-                        <p className="text-xs text-slate-500 dark:text-zinc-400">Audit trail of equipment deployments and match scores</p>
-                    </div>
-                    <Link href={route('employees.index')} className="text-xs font-semibold text-[#026eff] dark:text-[#0b79ff] hover:underline">
-                        View All Employees
-                    </Link>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50/80 dark:bg-zinc-800/60 border-b border-slate-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                            <tr>
-                                <th className="py-3.5 px-5">Device</th>
-                                <th className="py-3.5 px-5">Employee</th>
-                                <th className="py-3.5 px-5">Department / Profile</th>
-                                <th className="py-3.5 px-5">Match Fit</th>
-                                <th className="py-3.5 px-5">Source</th>
-                                <th className="py-3.5 px-5">Assigned Date</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/80">
-                            {(!recent_assignments || recent_assignments.length === 0) ? (
-                                <tr>
-                                    <td colSpan="6" className="py-8 text-center text-slate-400 dark:text-zinc-500 text-xs">
-                                        No recent fleet assignments recorded yet.
-                                    </td>
-                                </tr>
-                            ) : (
-                                recent_assignments.map((asg) => (
-                                    <tr key={asg.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 transition">
-                                        <td className="py-4 px-5">
-                                            {asg.device ? (
-                                                <Link href={route('devices.show', asg.device.id)} className="font-mono text-sm font-bold text-[#026eff] dark:text-[#38bdf8] hover:underline">
-                                                    {asg.device.asset_tag}
-                                                </Link>
-                                            ) : (
-                                                <span className="font-mono text-sm text-slate-400">N/A</span>
-                                            )}
-                                            <div className="text-xs text-slate-500 dark:text-zinc-400 font-medium mt-0.5">
-                                                {asg.device ? `${asg.device.brand} ${asg.device.model}` : 'Unassigned'}
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-5 font-bold text-slate-900 dark:text-zinc-100 text-sm">
-                                            {asg.employee?.name || 'Unknown Staff'}
-                                        </td>
-                                        <td className="py-4 px-5">
-                                            <div className="text-sm font-semibold text-slate-800 dark:text-zinc-200">{asg.employee?.department || 'General'}</div>
-                                            <div className="text-xs text-slate-400 dark:text-zinc-500 mt-0.5">{asg.employee?.role_profile?.name || 'Custom Role'}</div>
-                                        </td>
-                                        <td className="py-4 px-5">
-                                            {asg.match_score ? (
-                                                <span className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full border shadow-2xs ${
-                                                    asg.match_score >= 0.8 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-800/60' :
-                                                    asg.match_score >= 0.65 ? 'bg-[#026eff]/10 dark:bg-[#031a40]/60 text-[#026eff] dark:text-[#38bdf8] border-[#026eff]/20 dark:border-[#031a40]/60' :
-                                                    'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200/70 dark:border-rose-900/60'
-                                                }`}>
-                                                    {Math.round(asg.match_score * 100)}% Match
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-slate-400 dark:text-zinc-500">N/A</span>
-                                            )}
-                                        </td>
-                                        <td className="py-4 px-5">
-                                            <span className="text-xs uppercase font-bold text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-700">
-                                                {(asg.assignment_source || 'manual').replace('_', ' ')}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-5 text-xs font-medium text-slate-600 dark:text-zinc-400">
-                                            {asg.assigned_at ? new Date(asg.assigned_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                                        </td>
+                    <div className="overflow-x-auto">
+                        {activeTab === 'assignments' ? (
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-zinc-50/70 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                                    <tr>
+                                        <th className="py-2.5 px-5">Device</th>
+                                        <th className="py-2.5 px-5">Employee</th>
+                                        <th className="py-2.5 px-5">Department / Profile</th>
+                                        <th className="py-2.5 px-5">Match Fit</th>
+                                        <th className="py-2.5 px-5">Source</th>
+                                        <th className="py-2.5 px-5">Assigned Date</th>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                                    {(!recent_assignments || recent_assignments.length === 0) ? (
+                                        <tr>
+                                            <td colSpan="6" className="py-10 text-center text-zinc-400 dark:text-zinc-500 text-xs">
+                                                No recent fleet assignments recorded yet.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        recent_assignments.map((asg) => (
+                                            <tr key={asg.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                                                <td className="py-3.5 px-5">
+                                                    {asg.device ? (
+                                                        <Link href={route('devices.show', asg.device.id)} className="font-mono font-medium text-[#026eff] dark:text-sky-400 hover:underline">
+                                                            {asg.device.asset_tag}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="font-mono text-zinc-400">N/A</span>
+                                                    )}
+                                                    <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                                        {asg.device ? `${asg.device.brand} ${asg.device.model}` : 'Unassigned'}
+                                                    </div>
+                                                </td>
+                                                <td className="py-3.5 px-5 font-medium text-zinc-900 dark:text-zinc-100">
+                                                    {asg.employee?.name || 'Unknown Staff'}
+                                                </td>
+                                                <td className="py-3.5 px-5">
+                                                    <div className="font-medium text-zinc-800 dark:text-zinc-200">{asg.employee?.department || 'General'}</div>
+                                                    <div className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{asg.employee?.role_profile?.name || 'Custom Role'}</div>
+                                                </td>
+                                                <td className="py-3.5 px-5">
+                                                    {asg.match_score ? (
+                                                        <span className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-sm border tabular-nums ${
+                                                            asg.match_score >= 0.8 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400' :
+                                                            asg.match_score >= 0.65 ? 'bg-[#026eff]/10 border-[#026eff]/20 text-[#026eff] dark:text-sky-400' :
+                                                            'bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400'
+                                                        }`}>
+                                                            {Math.round(asg.match_score * 100)}% Match
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-zinc-400 dark:text-zinc-500">&mdash;</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-3.5 px-5">
+                                                    <span className="text-[11px] capitalize font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 rounded-sm">
+                                                        {(asg.assignment_source || 'manual').replace('_', ' ')}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3.5 px-5 text-zinc-500 dark:text-zinc-400 tabular-nums">
+                                                    {asg.assigned_at ? new Date(asg.assigned_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-zinc-50/70 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                                    <tr>
+                                        <th className="py-2.5 px-5">Asset</th>
+                                        <th className="py-2.5 px-5">Category</th>
+                                        <th className="py-2.5 px-5">Specs</th>
+                                        <th className="py-2.5 px-5">Condition</th>
+                                        <th className="py-2.5 px-5 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                                    {(!available_fleet || available_fleet.length === 0) ? (
+                                        <tr>
+                                            <td colSpan="5" className="py-10 text-center text-zinc-400 dark:text-zinc-500 text-xs">
+                                                No idle devices currently available in stockroom.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        available_fleet.map((device) => (
+                                            <tr key={device.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                                                <td className="py-3 px-5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shrink-0 overflow-hidden">
+                                                            <HardwareImage
+                                                                src={device.image_clip_url || device.image_url}
+                                                                alt={`${device.brand} ${device.model}`}
+                                                                deviceType={device.device_type}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <Link href={route('devices.show', device.id)} className="font-mono font-medium text-[#026eff] dark:text-sky-400 hover:underline">
+                                                                {device.asset_tag}
+                                                            </Link>
+                                                            <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                                                                {device.brand} {device.model}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-5 capitalize text-zinc-600 dark:text-zinc-300">
+                                                    {device.device_type}
+                                                </td>
+                                                <td className="py-3 px-5 text-zinc-600 dark:text-zinc-300">
+                                                    {['laptop', 'desktop'].includes(device.device_type) ? (
+                                                        <span className="tabular-nums">
+                                                            {device.cpu || 'Standard CPU'} &middot; {device.ram_gb}GB &middot; {device.storage_gb}GB {device.storage_type}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-zinc-500 dark:text-zinc-400">
+                                                            {device.serial_number || 'Standard accessory unit'}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="py-3 px-5">
+                                                    <span className="text-[11px] capitalize font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-sm">
+                                                        {device.condition || 'good'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 px-5 text-right">
+                                                    <Link
+                                                        href={route('devices.show', device.id)}
+                                                        className="font-medium text-[#026eff] dark:text-sky-400 hover:underline"
+                                                    >
+                                                        Inspect &rarr;
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
             </div>
         </AuthenticatedLayout>

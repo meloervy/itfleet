@@ -9,17 +9,18 @@ use Illuminate\Support\Facades\Hash;
 class UserSeeder extends Seeder
 {
     /**
-     * Seed the demo administrative and staff users for SpecMatch.
+     * Seed the demo administrative and staff users for ITFleet.
      *
      * Demo Credentials:
-     * - IT Administrator: admin@specmatch.local / password (Role: admin)
-     * - Asset Manager:    manager@specmatch.local / password (Role: manager)
-     * - Hardware Tech:    tech@specmatch.local / password (Role: technician)
+     * - IT Administrator: admin@itfleet.local / password (Role: admin)
+     * - Asset Manager:    manager@itfleet.local / password (Role: manager)
+     * - Hardware Tech:    tech@itfleet.local / password (Role: technician)
+     * - IT Auditor:       auditor@itfleet.local / password (Role: viewer)
      */
     public function run(): void
     {
         User::updateOrCreate(
-            ['email' => 'admin@specmatch.local'],
+            ['email' => 'admin@itfleet.local'],
             [
                 'name' => 'IT Administrator',
                 'password' => Hash::make('password'),
@@ -32,7 +33,7 @@ class UserSeeder extends Seeder
         );
 
         User::updateOrCreate(
-            ['email' => 'manager@specmatch.local'],
+            ['email' => 'manager@itfleet.local'],
             [
                 'name' => 'IT Asset Manager',
                 'password' => Hash::make('password'),
@@ -45,7 +46,7 @@ class UserSeeder extends Seeder
         );
 
         User::updateOrCreate(
-            ['email' => 'tech@specmatch.local'],
+            ['email' => 'tech@itfleet.local'],
             [
                 'name' => 'Hardware Technician',
                 'password' => Hash::make('password'),
@@ -53,6 +54,19 @@ class UserSeeder extends Seeder
                 'department' => 'Hardware Diagnostics & Maintenance',
                 'job_title' => 'Senior Hardware Diagnostic Specialist',
                 'phone' => '+63 919 345 6789',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'auditor@itfleet.local'],
+            [
+                'name' => 'IT Auditor',
+                'password' => Hash::make('password'),
+                'role' => 'viewer',
+                'department' => 'Compliance & Internal Audit',
+                'job_title' => 'IT Governance & Compliance Auditor',
+                'phone' => '+63 920 456 7890',
                 'email_verified_at' => now(),
             ]
         );

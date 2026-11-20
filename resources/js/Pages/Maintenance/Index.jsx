@@ -1,21 +1,88 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Checkbox from '@/Components/Checkbox';
 import CustomSelect from '@/Components/CustomSelect';
-import HardwareImage from '@/Components/HardwareImage';
+import InputError from '@/Components/InputError';
+import InputLabel from '@/Components/InputLabel';
+import Modal from '@/Components/Modal';
+import Pagination from '@/Components/Pagination';
+import PrimaryButton from '@/Components/PrimaryButton';
 import ResizableTh from '@/Components/ResizableTh';
+import SecondaryButton from '@/Components/SecondaryButton';
+import TextInput from '@/Components/TextInput';
 import { useResizableColumns } from '@/Hooks/useResizableColumns';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import {
     RiCalendarLine,
-    RiCheckLine,
     RiCloseLine,
+    RiComputerLine,
+    RiEditLine,
     RiFilter3Line,
     RiRefreshLine,
     RiSearchLine,
     RiToolsLine,
-    RiArrowUpDownLine,
-    RiArrowLeftLine,
 } from 'react-icons/ri';
+
+const statusBadgeMap = {
+    scheduled: {
+        label: 'Scheduled',
+        pill: 'bg-[#026eff]/10 border-[#026eff]/20 text-[#026eff] dark:text-sky-400',
+        dot: 'bg-[#026eff] dark:bg-sky-400',
+    },
+    in_progress: {
+        label: 'In progress',
+        pill: 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400',
+        dot: 'bg-amber-500',
+    },
+    completed: {
+        label: 'Completed',
+        pill: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+        dot: 'bg-emerald-500',
+    },
+    cancelled: {
+        label: 'Cancelled',
+        pill: 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400',
+        dot: 'bg-zinc-400',
+    },
+};
+
+const typeLabelMap = {
+    repair: {
+        label: 'Repair',
+        className: 'bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400',
+    },
+    upgrade: {
+        label: 'Upgrade',
+        className: 'bg-[#026eff]/10 border-[#026eff]/20 text-[#026eff] dark:text-sky-400',
+    },
+    preventive: {
+        label: 'Preventive',
+        className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+    },
+    inspection: {
+        label: 'Inspection',
+        className: 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300',
+    },
+    replacement: {
+        label: 'Replacement',
+        className: 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400',
+    },
+};
+
+const formatCurrency = (val) =>
+    `₱${Number(val || 0).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+
+const formatDate = (dateString) => {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+};
 
 export default function MaintenanceIndex({ logs, stats = {}, filters = {} }) {
     const { auth } = usePage().props;
@@ -25,10 +92,10 @@ export default function MaintenanceIndex({ logs, stats = {}, filters = {} }) {
     const [search, setSearch] = useState(filters.search || '');
     const [type, setType] = useState(filters.type || '');
     const [status, setStatus] = useState(filters.status || '');
-    const [selectedLogToUpdate, setSelectedLogToUpdate] = useState(null);
     const [wrapText, setWrapText] = useState(false);
+    const [selectedLogToUpdate, setSelectedLogToUpdate] = useState(null);
 
-    const activeFilterCount = (search ? 1 : 0) + (type ? 1 : 0) + (status ? 1 : 0);
+    const isFirstRender = useRef(true);
 
     const initialWidths = {
         device: 280,
@@ -39,17 +106,18 @@ export default function MaintenanceIndex({ logs, stats = {}, filters = {} }) {
         actions: 140,
     };
 
-    const { widths, startResize, autoExpandCol, resetWidths, isResizing, resizingCol } = useResizableColumns(initialWidths, 'maintenance_table_v5');
+    const { widths, startResize, autoExpandCol, resetWidths, resizingCol } = useResizableColumns(
+        initialWidths,
+        'maintenance_table_v5'
+    );
 
-    const { data: updateData, setData: setUpdateData, put, processing, reset } = useForm({
+    const { data, setData, put, processing, errors, reset, clearErrors } = useForm({
         cost: 0,
         completed_at: new Date().toISOString().split('T')[0],
         performance_assessment: '',
         status: 'completed',
         restore_to_available: true,
     });
-
-    const isFirstRender = useRef(true);
 
     useEffect(() => {
         if (isFirstRender.current) {
@@ -74,12 +142,10 @@ export default function MaintenanceIndex({ logs, stats = {}, filters = {} }) {
         return () => clearTimeout(timer);
     }, [search, type, status]);
 
-    const handleSort = (sortKey, explicitDirection = null) => {
-        const currentSort = filters?.sort || 'timeline';
-        const currentDirection = filters?.direction || 'desc';
-        const nextDirection = explicitDirection !== null
-            ? explicitDirection
-            : (currentSort === sortKey && currentDirection === 'asc' ? 'desc' : 'asc');
+    const handleSort = (sortKey) => {
+        const currentSort = filters.sort || 'started_at';
+        const currentDirection = filters.direction || 'desc';
+        const nextDirection = currentSort === sortKey && currentDirection === 'asc' ? 'desc' : 'asc';
 
         router.get(
             route('maintenance.index'),
@@ -116,290 +182,340 @@ export default function MaintenanceIndex({ logs, stats = {}, filters = {} }) {
         router.get(route('maintenance.index'));
     };
 
-    const handleOpenUpdateModal = (log) => {
+    const openUpdateModal = (log) => {
+        clearErrors();
         setSelectedLogToUpdate(log);
-        setUpdateData({
-            cost: log.cost || 0,
-            completed_at: log.completed_at || new Date().toISOString().split('T')[0],
+        setData({
+            cost: log.cost ?? 0,
+            completed_at: log.completed_at
+                ? String(log.completed_at).split('T')[0]
+                : new Date().toISOString().split('T')[0],
             performance_assessment: log.performance_assessment || '',
-            status: log.status === 'completed' ? 'completed' : 'completed',
-            restore_to_available: true,
+            status: log.status === 'scheduled' || log.status === 'in_progress' ? 'completed' : log.status,
+            restore_to_available: log.device?.lifecycle_stage === 'maintenance',
         });
     };
 
-    const handleSaveUpdate = (e) => {
+    const closeUpdateModal = () => {
+        setSelectedLogToUpdate(null);
+        reset();
+        clearErrors();
+    };
+
+    const handleUpdateSubmit = (e) => {
         e.preventDefault();
         if (!selectedLogToUpdate) return;
-
         put(route('maintenance.update', selectedLogToUpdate.id), {
-            onSuccess: () => {
-                setSelectedLogToUpdate(null);
-                reset();
-            },
+            preserveScroll: true,
+            onSuccess: () => closeUpdateModal(),
         });
     };
+
+    const activeFilterCount = [search, type, status].filter(Boolean).length;
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-sans font-extrabold tracking-tight text-slate-900 dark:text-zinc-100">IT Maintenance & Servicing</h1>
-                        <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1 max-w-2xl">
-                            Hardware repairs, component upgrades, preventive servicing, and performance assessments.
+                        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                            Maintenance & Servicing Hub
+                        </h1>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                            Centralized repair queue, preventive upgrades, expenditure ledger, and post-repair checks.
                         </p>
                     </div>
-                    <Link
-                        href={route('devices.index')}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 dark:bg-zinc-800 text-sm font-semibold text-white dark:text-zinc-100 hover:bg-slate-800 dark:hover:bg-zinc-700 shadow-sm transition self-start sm:self-auto border border-transparent dark:border-zinc-700"
-                    >
-                        <RiArrowLeftLine className="w-4 h-4" />
-                        <span>View Fleet Inventory</span>
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <Link
+                            href={route('devices.index')}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                        >
+                            <RiComputerLine className="w-3.5 h-3.5 text-zinc-500" />
+                            <span>Inspect Fleet Devices</span>
+                        </Link>
+                    </div>
                 </div>
             }
         >
-            <Head title="Maintenance & Servicing - SpecMatch" />
+            <Head title="Maintenance Hub - ITFleet" />
 
-            <div className="space-y-6">
-                {/* Top Metrics Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 p-5 shadow-xs">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-400">Total Servicing Spend</span>
-                            <span className="p-2 rounded-xl bg-[#026eff]/10 dark:bg-[#031a40]/40 text-[#026eff] dark:text-[#0b79ff]">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </span>
-                        </div>
-                        <div className="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-zinc-100">
-                            ₱{Number(stats.total_spend || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">Cumulative hardware repair & upgrade expenditures</p>
+            {/* 3 Minimal KPI Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 p-4">
+                    <div className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                        Completed Servicing Spend
                     </div>
-
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 p-5 shadow-xs">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-400">Active Servicing Queue</span>
-                            <span className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                            </span>
-                        </div>
-                        <div className="mt-3 text-2xl font-black tracking-tight text-amber-600 dark:text-amber-400">
-                            {stats.active_count || 0} Assets
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">Hardware currently in repair or scheduled for maintenance</p>
+                    <div className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+                        {formatCurrency(stats.total_spend)}
                     </div>
-
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 p-5 shadow-xs">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-400">Completed Lifecycle Actions</span>
-                            <span className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </span>
-                        </div>
-                        <div className="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-zinc-100">
-                            {stats.completed_count || 0}
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">Historical repairs & upgrades logged with performance audits</p>
+                    <div className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        Cumulative closed repair &amp; upgrade cost
                     </div>
                 </div>
 
-                {/* 2. Filters & Search Bar */}
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 p-4 shadow-2xs">
-                    <form onSubmit={handleFilter}>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-center">
-                            {/* Search Bar */}
-                            <div className="lg:col-span-4 relative">
-                                <RiSearchLine className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-                                <input
-                                    type="text"
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Search log title, device, scope, technician..."
-                                    className="w-full text-xs font-medium pl-9 pr-3.5 py-2 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 shadow-2xs transition"
-                                />
-                            </div>
+                <button
+                    type="button"
+                    onClick={() => setStatus((prev) => (prev === 'in_progress' ? '' : 'in_progress'))}
+                    className={`text-left rounded-sm border p-4 transition cursor-pointer ${
+                        status === 'in_progress'
+                            ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700'
+                            : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                    }`}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                            Active Queue (Scheduled / In Progress)
+                        </span>
+                        {(stats.active_count ?? 0) > 0 && (
+                            <span className="w-1.5 h-1.5 rounded-sm bg-amber-500" />
+                        )}
+                    </div>
+                    <div className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+                        {stats.active_count ?? 0}
+                    </div>
+                    <div className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        {status === 'in_progress' ? 'Filtered to in progress' : 'Click to filter in-progress repairs'}
+                    </div>
+                </button>
 
-                            {/* Maintenance Type Filter */}
-                            <div className="lg:col-span-3">
-                                <CustomSelect
-                                    value={type}
-                                    onChange={(val) => setType(val)}
-                                    placeholder="All Maintenance Types"
-                                    options={[
-                                        { value: 'repair', label: 'Repair' },
-                                        { value: 'upgrade', label: 'Hardware Upgrade' },
-                                        { value: 'preventive', label: 'Preventive Servicing' },
-                                        { value: 'inspection', label: 'Inspection & Diagnostics' },
-                                    ]}
-                                />
-                            </div>
+                <button
+                    type="button"
+                    onClick={() => setStatus((prev) => (prev === 'completed' ? '' : 'completed'))}
+                    className={`text-left rounded-sm border p-4 transition cursor-pointer ${
+                        status === 'completed'
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-700'
+                            : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                    }`}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                            Completed Logs
+                        </span>
+                        <span className="w-1.5 h-1.5 rounded-sm bg-emerald-500" />
+                    </div>
+                    <div className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+                        {stats.completed_count ?? 0}
+                    </div>
+                    <div className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        {status === 'completed' ? 'Filtered to completed' : 'Click to filter completed logs'}
+                    </div>
+                </button>
+            </div>
 
-                            {/* Status Filter */}
-                            <div className="lg:col-span-3">
-                                <CustomSelect
-                                    value={status}
-                                    onChange={(val) => setStatus(val)}
-                                    placeholder="All Statuses"
-                                    options={[
-                                        { value: 'scheduled', label: 'Scheduled' },
-                                        { value: 'in_progress', label: 'In Progress' },
-                                        { value: 'completed', label: 'Completed' },
-                                        { value: 'cancelled', label: 'Cancelled' },
-                                    ]}
-                                />
-                            </div>
-
-                            {/* Filter & Reset Buttons */}
-                            <div className="lg:col-span-2 flex items-center gap-1.5">
+            {/* Filter & Toolbar */}
+            <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 p-4 mb-5">
+                <form onSubmit={handleFilter}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-2 lg:col-span-5 relative">
+                            <RiSearchLine className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search activity title, asset tag, model, technician..."
+                                className="w-full pl-9 pr-8 py-2 text-xs rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-[#026eff] focus:ring-0"
+                            />
+                            {search && (
                                 <button
-                                    type="submit"
-                                    className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-slate-800 dark:hover:bg-white transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                                    type="button"
+                                    onClick={() => setSearch('')}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer"
+                                    aria-label="Clear search"
                                 >
-                                    <RiFilter3Line className="w-3.5 h-3.5" />
-                                    <span>Filter</span>
+                                    <RiCloseLine className="w-4 h-4" />
                                 </button>
-                                {activeFilterCount > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={clearFilters}
-                                        className="py-2 px-2.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 transition cursor-pointer"
-                                        title="Reset all filters"
-                                    >
-                                        <RiRefreshLine className="w-3.5 h-3.5" />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </form>
-
-                    {/* Toolbar: Total Count & Hint */}
-                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-zinc-400 text-[11px]">
-                            <span className="font-semibold text-slate-800 dark:text-zinc-200">
-                                {logs.total || logs.data?.length || 0} Maintenance Records
-                            </span>
-                            {activeFilterCount > 0 && (
-                                <>
-                                    <span>&bull;</span>
-                                    <span>
-                                        Filtered by <strong className="text-slate-800 dark:text-zinc-200">{activeFilterCount}</strong> active criteria
-                                    </span>
-                                </>
                             )}
-                            <span>&bull;</span>
-                            <span className="hidden sm:inline">Track status, upgrade history, and servicing expenses</span>
                         </div>
+
+                        <div className="lg:col-span-3">
+                            <CustomSelect
+                                value={type}
+                                onChange={setType}
+                                placeholder="Service type"
+                                options={[
+                                    { value: '', label: 'All service types' },
+                                    { value: 'repair', label: 'Repair' },
+                                    { value: 'upgrade', label: 'Upgrade' },
+                                    { value: 'preventive', label: 'Preventive' },
+                                    { value: 'inspection', label: 'Inspection' },
+                                    { value: 'replacement', label: 'Replacement' },
+                                ]}
+                            />
+                        </div>
+
+                        <div className="lg:col-span-2">
+                            <CustomSelect
+                                value={status}
+                                onChange={setStatus}
+                                placeholder="Status"
+                                options={[
+                                    { value: '', label: 'All statuses' },
+                                    { value: 'scheduled', label: 'Scheduled' },
+                                    { value: 'in_progress', label: 'In Progress' },
+                                    { value: 'completed', label: 'Completed' },
+                                    { value: 'cancelled', label: 'Cancelled' },
+                                ]}
+                            />
+                        </div>
+
+                        <div className="lg:col-span-2 flex items-center gap-1.5">
+                            <button
+                                type="submit"
+                                className="flex-1 py-2 px-3 text-xs font-medium rounded-sm border border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white transition cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                                <RiFilter3Line className="w-3.5 h-3.5" />
+                                <span>Filter</span>
+                            </button>
+                            {activeFilterCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={clearFilters}
+                                    className="py-2 px-2.5 text-xs font-medium rounded-sm border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    title="Reset all filters"
+                                >
+                                    <RiRefreshLine className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </form>
+
+                {/* Single clean toolbar */}
+                <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 tabular-nums">
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                            {logs.total} Service Records
+                        </span>
+                        <span className="text-zinc-300 dark:text-zinc-700">&bull;</span>
+                        <button
+                            type="button"
+                            onClick={() => handleSort('timeline')}
+                            className={`inline-flex items-center gap-1 text-[11px] hover:text-zinc-900 dark:hover:text-zinc-100 transition cursor-pointer ${
+                                (filters.sort || 'started_at') === 'timeline' || filters.sort === 'started_at'
+                                    ? 'text-[#026eff] dark:text-sky-400 font-medium'
+                                    : ''
+                            }`}
+                        >
+                            <RiCalendarLine className="w-3 h-3" />
+                            <span>Sort by timeline</span>
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                        <button
+                            type="button"
+                            onClick={() => setWrapText(!wrapText)}
+                            className={`px-2.5 py-1 rounded-sm border text-[11px] font-medium transition cursor-pointer ${
+                                wrapText
+                                    ? 'bg-[#026eff]/10 text-[#026eff] border-[#026eff]/30 dark:text-sky-400'
+                                    : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                            }`}
+                        >
+                            Wrap: {wrapText ? 'ON' : 'OFF'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={resetWidths}
+                            className="px-2.5 py-1 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 text-[11px] font-medium transition cursor-pointer"
+                        >
+                            Reset
+                        </button>
                     </div>
                 </div>
+            </div>
 
-                {/* Maintenance Logs Table */}
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-2xs overflow-hidden">
-                    {/* Column Adjustment & Display Control Toolbar */}
-                    <div className="px-4 py-2 bg-slate-50/70 dark:bg-zinc-800/40 border-b border-slate-200/70 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-zinc-400 text-[11px]">
-                            <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-[#026eff]/10 text-[#026eff]">
-                                <RiArrowUpDownLine className="w-3 h-3" />
-                            </span>
-                            <span>Click any header to sort &bull; Drag dividers to resize</span>
-                        </div>
-                        <div className="flex items-center gap-2 ml-auto">
+            {/* Maintenance Table */}
+            <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                {logs.data.length === 0 ? (
+                    <div className="p-12 text-center">
+                        <RiToolsLine className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            No maintenance logs found
+                        </p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                            Log a new repair or inspection directly from any device&apos;s detail page.
+                        </p>
+                        {activeFilterCount > 0 && (
                             <button
                                 type="button"
-                                onClick={() => setWrapText(!wrapText)}
-                                className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                                    wrapText
-                                        ? 'bg-[#026eff]/15 text-[#026eff] border-[#026eff]/30 dark:bg-[#026eff]/20 dark:text-sky-300'
-                                        : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700/60'
-                                }`}
-                                title="Toggle text wrapping to reveal full maintenance descriptions without truncation"
+                                onClick={clearFilters}
+                                className="mt-4 px-3.5 py-1.5 rounded-sm border border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium hover:bg-zinc-800 dark:hover:bg-white transition cursor-pointer"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10l-3-3m0 6l3-3m5 3H4" />
-                                </svg>
-                                <span>{wrapText ? 'Wrap Text: ON' : 'Wrap Text: OFF'}</span>
+                                Clear filters
                             </button>
-                            <button
-                                type="button"
-                                onClick={resetWidths}
-                                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 text-[11px] font-medium transition cursor-pointer"
-                                title="Reset column widths to default"
-                            >
-                                Reset Columns
-                            </button>
-                        </div>
+                        )}
                     </div>
-
+                ) : (
                     <div className="overflow-x-auto">
                         <table
-                            className="w-full text-left text-sm table-fixed"
-                            style={{ minWidth: `${Math.max(1100, Object.values(widths).reduce((a, b) => a + b, 0))}px` }}
+                            className="w-full text-left text-xs table-fixed"
+                            style={{ minWidth: `${Math.max(960, Object.values(widths).reduce((a, b) => a + b, 0))}px` }}
                         >
-                            <thead className="bg-slate-50/80 dark:bg-zinc-800/60 border-b border-slate-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider whitespace-nowrap text-slate-500 dark:text-zinc-400">
+                            <thead className="bg-zinc-50/70 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800">
                                 <tr>
                                     <ResizableTh
                                         colKey="device"
                                         sortKey="device"
+                                        sortable
                                         currentSort={filters.sort}
-                                        sortDirection={filters.direction || 'desc'}
+                                        sortDirection={filters.direction}
                                         onSort={handleSort}
                                         width={widths.device}
                                         onResizeStart={startResize}
                                         onAutoExpand={autoExpandCol}
                                         isResizing={resizingCol === 'device'}
                                     >
-                                        Asset Tag & Device
+                                        Hardware Unit
                                     </ResizableTh>
                                     <ResizableTh
                                         colKey="activity"
                                         sortKey="activity"
+                                        sortable
                                         currentSort={filters.sort}
-                                        sortDirection={filters.direction || 'desc'}
+                                        sortDirection={filters.direction}
                                         onSort={handleSort}
                                         width={widths.activity}
                                         onResizeStart={startResize}
                                         onAutoExpand={autoExpandCol}
                                         isResizing={resizingCol === 'activity'}
                                     >
-                                        Activity & Scope
+                                        Service Activity
                                     </ResizableTh>
                                     <ResizableTh
                                         colKey="technician"
                                         sortKey="technician"
+                                        sortable
                                         currentSort={filters.sort}
-                                        sortDirection={filters.direction || 'desc'}
+                                        sortDirection={filters.direction}
                                         onSort={handleSort}
                                         width={widths.technician}
                                         onResizeStart={startResize}
                                         onAutoExpand={autoExpandCol}
                                         isResizing={resizingCol === 'technician'}
                                     >
-                                        Technician & Schedule
+                                        Technician &amp; Dates
                                     </ResizableTh>
                                     <ResizableTh
                                         colKey="cost"
                                         sortKey="cost"
+                                        sortable
                                         currentSort={filters.sort}
-                                        sortDirection={filters.direction || 'desc'}
+                                        sortDirection={filters.direction}
                                         onSort={handleSort}
+                                        align="right"
                                         width={widths.cost}
                                         onResizeStart={startResize}
                                         onAutoExpand={autoExpandCol}
                                         isResizing={resizingCol === 'cost'}
                                     >
-                                        Cost (₱)
+                                        Cost
                                     </ResizableTh>
                                     <ResizableTh
                                         colKey="status"
                                         sortKey="status"
+                                        sortable
                                         currentSort={filters.sort}
-                                        sortDirection={filters.direction || 'desc'}
+                                        sortDirection={filters.direction}
                                         onSort={handleSort}
                                         width={widths.status}
                                         onResizeStart={startResize}
@@ -410,228 +526,194 @@ export default function MaintenanceIndex({ logs, stats = {}, filters = {} }) {
                                     </ResizableTh>
                                     <ResizableTh
                                         colKey="actions"
-                                        width={widths.actions}
-                                        onResizeStart={startResize}
-                                        onAutoExpand={autoExpandCol}
-                                        isResizing={resizingCol === 'actions'}
                                         align="right"
                                         resizable={false}
+                                        width={widths.actions}
                                     >
-                                        Action
+                                        Actions
                                     </ResizableTh>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/60">
-                                {logs.data.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="py-16 text-center text-slate-400 dark:text-zinc-500">
-                                            No maintenance records found matching your filter criteria.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    logs.data.map((log) => (
-                                        <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 transition">
-                                            {/* 1. Device & Asset */}
-                                            <td className="py-4 px-5">
-                                                <div className="flex items-center gap-3.5">
-                                                    <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs p-0.5">
-                                                        <HardwareImage
-                                                            src={log.device?.image_clip_url || log.device?.image_url}
-                                                            alt={log.device?.name}
-                                                            className="w-full h-full object-cover rounded-lg"
-                                                        />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        {log.device ? (
-                                                            <Link
-                                                                href={route('devices.show', log.device.id)}
-                                                                className="font-mono font-bold text-xs text-[#026eff] dark:text-[#38bdf8] bg-[#026eff]/10 dark:bg-[#026eff]/20 px-2 py-0.5 rounded-md border border-[#026eff]/20 hover:underline inline-block truncate"
-                                                                title={log.device.asset_tag}
-                                                            >
-                                                                {log.device.asset_tag}
-                                                            </Link>
-                                                        ) : (
-                                                            <span className="text-slate-400 dark:text-zinc-500 text-xs">Unknown Asset</span>
-                                                        )}
-                                                        <div className="font-bold text-slate-900 dark:text-zinc-100 text-sm truncate mt-1 leading-snug" title={`${log.device?.brand} ${log.device?.model}`}>
-                                                            {log.device?.brand} {log.device?.model}
+                            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                                {logs.data.map((log) => {
+                                    const statusInfo = statusBadgeMap[log.status] || statusBadgeMap.scheduled;
+                                    const typeInfo = typeLabelMap[log.type] || typeLabelMap.repair;
+                                    const device = log.device;
+
+                                    return (
+                                        <tr
+                                            key={log.id}
+                                            className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors"
+                                        >
+                                            <td className="py-3 px-4 align-middle">
+                                                {device ? (
+                                                    <div className="min-w-0">
+                                                        <Link
+                                                            href={route('devices.show', device.id)}
+                                                            className={`block font-medium text-zinc-900 dark:text-zinc-100 hover:text-[#026eff] dark:hover:text-sky-400 transition ${
+                                                                wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                            }`}
+                                                        >
+                                                            {device.brand} {device.model}
+                                                        </Link>
+                                                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                                            <span className="font-mono tabular-nums">{device.asset_tag}</span>
+                                                            {device.lifecycle_stage === 'maintenance' && (
+                                                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                                                    In service bay
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                </div>
+                                                ) : (
+                                                    <span className="text-zinc-400 dark:text-zinc-500">Removed device</span>
+                                                )}
                                             </td>
 
-                                            {/* 2. Activity & Scope */}
-                                            <td className="py-4 px-5">
-                                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                                                    <span className={`font-bold text-slate-900 dark:text-zinc-100 text-sm leading-snug ${wrapText ? 'break-words' : 'truncate'}`} title={log.title}>
-                                                        {log.title}
+                                            <td className="py-3 px-4 align-middle">
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span
+                                                        className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border text-[10px] font-medium ${typeInfo.className}`}
+                                                    >
+                                                        {typeInfo.label}
                                                     </span>
-                                                    <span className={`shrink-0 px-2 py-0.5 text-xs font-bold uppercase rounded-lg tracking-wider border shadow-2xs ${
-                                                        log.type === 'repair' ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-900/50' :
-                                                        log.type === 'upgrade' ? 'bg-[#026eff]/10 dark:bg-[#031a40]/60 text-[#026eff] dark:text-[#38bdf8] border-[#026eff]/20 dark:border-[#031a40]/60' :
-                                                        log.type === 'preventive' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-900/50' :
-                                                        'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'
-                                                    }`}>
-                                                        {log.type}
+                                                    <span
+                                                        className={`font-medium text-zinc-900 dark:text-zinc-100 ${
+                                                            wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                        }`}
+                                                    >
+                                                        {log.title}
                                                     </span>
                                                 </div>
                                                 {log.description && (
-                                                    <p className={`text-xs text-slate-600 dark:text-zinc-300 mt-1.5 leading-relaxed ${wrapText ? 'break-words whitespace-normal' : 'truncate'}`} title={log.description}>
+                                                    <p
+                                                        className={`text-[11px] text-zinc-500 dark:text-zinc-400 ${
+                                                            wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                        }`}
+                                                    >
                                                         {log.description}
                                                     </p>
                                                 )}
                                                 {log.performance_assessment && (
-                                                    <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300" title={log.performance_assessment}>
-                                                        <span className="font-bold uppercase tracking-wider text-[10px] bg-emerald-100/80 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded-md border border-emerald-300/60 dark:border-emerald-800/60">Audit</span>
-                                                        <span className={wrapText ? 'break-words whitespace-normal' : 'truncate font-medium'}>{log.performance_assessment}</span>
-                                                    </div>
+                                                    <p
+                                                        className={`text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 ${
+                                                            wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                        }`}
+                                                    >
+                                                        Assessment: {log.performance_assessment}
+                                                    </p>
                                                 )}
                                             </td>
 
-                                            {/* 3. Technician & Dates */}
-                                            <td className="py-4 px-5">
-                                                <div className="font-bold text-slate-900 dark:text-zinc-100 text-sm truncate" title={log.performed_by || 'Internal IT Desk'}>
-                                                    {log.performed_by || 'Internal IT Desk'}
+                                            <td className="py-3 px-4 align-middle">
+                                                <div
+                                                    className={`text-xs text-zinc-800 dark:text-zinc-200 font-medium ${
+                                                        wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                    }`}
+                                                >
+                                                    {log.performed_by || 'Internal IT'}
                                                 </div>
-                                                <div className="text-xs text-slate-500 dark:text-zinc-400 mt-1 truncate font-medium">
-                                                    <span>{new Date(log.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                                    {log.completed_at && (
-                                                        <span className="text-slate-400 dark:text-zinc-500"> — {new Date(log.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                                    )}
+                                                <div className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 tabular-nums">
+                                                    {formatDate(log.started_at)}
+                                                    {log.completed_at ? ` → ${formatDate(log.completed_at)}` : ''}
                                                 </div>
                                             </td>
 
-                                            {/* 4. Cost */}
-                                            <td className="py-4 px-5 font-black text-slate-900 dark:text-zinc-100 text-sm whitespace-nowrap">
-                                                ₱{Number(log.cost || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            <td className="py-3 px-4 align-middle text-right font-mono tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
+                                                {formatCurrency(log.cost)}
                                             </td>
 
-                                            {/* 5. Status */}
-                                            <td className="py-4 px-5 whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider border shadow-2xs ${
-                                                    log.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-900/50' :
-                                                    log.status === 'in_progress' ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-900/50' :
-                                                    log.status === 'scheduled' ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200/60 dark:border-sky-900/50' :
-                                                    'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700'
-                                                }`}>
-                                                    {log.status.replace('_', ' ')}
+                                            <td className="py-3 px-4 align-middle">
+                                                <span
+                                                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border text-[11px] font-medium ${statusInfo.pill}`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-sm ${statusInfo.dot}`} />
+                                                    {statusInfo.label}
                                                 </span>
                                             </td>
 
-                                            {/* 6. Action */}
-                                            <td className="py-4 px-5 text-right whitespace-nowrap">
+                                            <td className="py-3 px-4 align-middle text-right">
                                                 {canUpdate ? (
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleOpenUpdateModal(log)}
-                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-[#026eff] hover:text-white dark:bg-zinc-800 dark:hover:bg-[#026eff] text-slate-700 dark:text-zinc-200 transition shadow-2xs cursor-pointer"
+                                                        onClick={() => openUpdateModal(log)}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:border-[#026eff] hover:text-[#026eff] dark:hover:text-sky-400 transition cursor-pointer"
                                                     >
-                                                        <span>{log.status === 'completed' ? 'Edit Audit' : 'Assess & Close'}</span>
+                                                        <RiEditLine className="w-3.5 h-3.5" />
+                                                        <span>Assess</span>
                                                     </button>
+                                                ) : device ? (
+                                                    <Link
+                                                        href={route('devices.show', device.id)}
+                                                        className="text-[11px] font-medium text-zinc-500 hover:text-[#026eff] dark:hover:text-sky-400 transition"
+                                                    >
+                                                        View device
+                                                    </Link>
                                                 ) : (
-                                                    <span className="text-xs text-slate-400 dark:text-zinc-500 italic">View Only</span>
+                                                    <span className="text-zinc-400">—</span>
                                                 )}
                                             </td>
                                         </tr>
-                                    ))
-                                )}
+                                    );
+                                })}
                             </tbody>
                         </table>
-                    </div>
-                </div>
-
-                {/* Pagination Bar */}
-                {logs.links && logs.links.length > 3 && (
-                    <div className="mt-5 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-2xs">
-                        <div className="text-slate-500 dark:text-zinc-400">
-                            Showing <span className="font-semibold text-slate-900 dark:text-zinc-100">{logs.from}</span> to <span className="font-semibold text-slate-900 dark:text-zinc-100">{logs.to}</span> of <span className="font-semibold text-slate-900 dark:text-zinc-100">{logs.total}</span> maintenance records
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                            {logs.links.map((link, idx) => (
-                                <Link
-                                    key={idx}
-                                    href={link.url || '#'}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                    className={`px-3 py-1.5 text-xs rounded-xl font-medium transition ${
-                                        link.active
-                                            ? 'bg-[#026eff] text-white shadow-2xs'
-                                            : 'border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800'
-                                    } ${!link.url ? 'opacity-40 pointer-events-none' : ''}`}
-                                />
-                            ))}
-                        </div>
                     </div>
                 )}
             </div>
 
-            {/* Modal: Update / Complete Servicing Log */}
-            {selectedLogToUpdate && (
-                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200/90 dark:border-zinc-800">
-                        {/* Modal Header */}
-                        <div className="flex items-start justify-between pb-4 border-b border-slate-100 dark:border-zinc-800">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-[#026eff]/10 dark:bg-[#026eff]/20 text-[#026eff] dark:text-[#38bdf8] flex items-center justify-center shrink-0">
-                                    <RiToolsLine className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-base text-slate-900 dark:text-zinc-100">
-                                        Assess & Update Servicing
-                                    </h3>
-                                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                                        <span className="font-mono font-semibold text-slate-700 dark:text-zinc-300">
-                                            {selectedLogToUpdate.device?.asset_tag}
-                                        </span>
-                                        <span>&bull;</span>
-                                        <span className="truncate max-w-[220px]" title={selectedLogToUpdate.title}>
-                                            {selectedLogToUpdate.title}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setSelectedLogToUpdate(null)}
-                                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                                title="Close modal"
-                            >
-                                <RiCloseLine className="w-5 h-5" />
-                            </button>
+            <Pagination
+                links={logs.links}
+                from={logs.from}
+                to={logs.to}
+                total={logs.total}
+                label="maintenance records"
+            />
+
+            {/* Assess & Update Servicing Modal */}
+            <Modal show={Boolean(selectedLogToUpdate)} onClose={closeUpdateModal} maxWidth="md">
+                <form onSubmit={handleUpdateSubmit} className="p-6">
+                    <div className="flex items-start justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                        <div>
+                            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                                Assess &amp; Update Servicing
+                            </h2>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                {selectedLogToUpdate?.device?.brand} {selectedLogToUpdate?.device?.model} &bull;{' '}
+                                <span className="font-mono">{selectedLogToUpdate?.device?.asset_tag}</span>
+                            </p>
                         </div>
+                        <button
+                            type="button"
+                            onClick={closeUpdateModal}
+                            className="p-1.5 rounded-sm border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                            aria-label="Close modal"
+                        >
+                            <RiCloseLine className="w-4 h-4" />
+                        </button>
+                    </div>
 
-                        {/* Modal Form */}
-                        <form onSubmit={handleSaveUpdate} className="mt-5 space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {/* Cost Input */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                                        Final Incurred Cost <span className="text-rose-500">*</span>
-                                    </label>
-                                    <div className="relative rounded-xl shadow-2xs">
-                                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-zinc-500 font-semibold text-xs">
-                                            ₱
-                                        </div>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            value={updateData.cost}
-                                            onChange={(e) => setUpdateData('cost', e.target.value)}
-                                            placeholder="0.00"
-                                            className="w-full pl-7 pr-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 placeholder-slate-400 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 transition shadow-2xs"
-                                            required
-                                        />
-                                    </div>
-                                </div>
+                    {selectedLogToUpdate && (
+                        <div className="mt-4 p-3 rounded-sm bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800">
+                            <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                                {selectedLogToUpdate.title}
+                            </div>
+                            {selectedLogToUpdate.description && (
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                    {selectedLogToUpdate.description}
+                                </p>
+                            )}
+                        </div>
+                    )}
 
-                                {/* Status Select */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                                        Servicing Status <span className="text-rose-500">*</span>
-                                    </label>
+                    <div className="mt-4 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <InputLabel htmlFor="maint_status" value="Service Status *" />
+                                <div className="mt-1.5">
                                     <CustomSelect
-                                        value={updateData.status}
-                                        onChange={(val) => setUpdateData('status', val)}
+                                        value={data.status}
+                                        onChange={(val) => setData('status', val)}
                                         options={[
                                             { value: 'scheduled', label: 'Scheduled' },
                                             { value: 'in_progress', label: 'In Progress' },
@@ -640,81 +722,80 @@ export default function MaintenanceIndex({ logs, stats = {}, filters = {} }) {
                                         ]}
                                     />
                                 </div>
+                                <InputError message={errors.status} className="mt-1" />
                             </div>
 
-                            {/* Completion Date */}
                             <div>
-                                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                                    Completion Date
-                                </label>
-                                <div className="relative rounded-xl shadow-2xs">
-                                    <input
-                                        type="date"
-                                        value={updateData.completed_at || ''}
-                                        onChange={(e) => setUpdateData('completed_at', e.target.value)}
-                                        className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 transition shadow-2xs"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Performance Assessment */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                                        Performance Assessment & Impact <span className="text-rose-500">*</span>
-                                    </label>
-                                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">Required for IT audit</span>
-                                </div>
-                                <textarea
-                                    rows={3}
-                                    value={updateData.performance_assessment}
-                                    onChange={(e) => setUpdateData('performance_assessment', e.target.value)}
-                                    placeholder="Detail the operational outcome (e.g. thermal stability verified, RAM recognized, battery health at 98%, stress test passed)..."
-                                    className="w-full p-3 text-xs leading-relaxed rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 transition shadow-2xs"
+                                <InputLabel htmlFor="maint_cost" value="Final Servicing Cost (PHP) *" />
+                                <TextInput
+                                    id="maint_cost"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={data.cost}
+                                    onChange={(e) => setData('cost', e.target.value)}
+                                    className="mt-1.5 block w-full text-xs font-mono tabular-nums"
                                     required
                                 />
+                                <InputError message={errors.cost} className="mt-1" />
                             </div>
+                        </div>
 
-                            {/* Transition Stage Option */}
-                            <label className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/80 dark:border-zinc-700/60 cursor-pointer hover:bg-slate-100/70 dark:hover:bg-zinc-800/70 transition">
-                                <input
-                                    type="checkbox"
-                                    checked={updateData.restore_to_available}
-                                    onChange={(e) => setUpdateData('restore_to_available', e.target.checked)}
-                                    className="mt-0.5 w-4 h-4 rounded text-[#026eff] focus:ring-[#026eff] border-slate-300 dark:border-zinc-600 dark:bg-zinc-700 cursor-pointer"
-                                />
-                                <div className="flex-1 text-xs">
-                                    <span className="font-semibold text-slate-900 dark:text-zinc-100 block">
-                                        Transition Asset back to Active Deployment
-                                    </span>
-                                    <span className="text-slate-500 dark:text-zinc-400 text-[11px] mt-0.5 block leading-normal">
-                                        Restores the hardware unit to Available status in the fleet inventory upon ticket completion.
-                                    </span>
-                                </div>
-                            </label>
+                        <div>
+                            <InputLabel htmlFor="maint_completed_at" value="Completion Date" />
+                            <TextInput
+                                id="maint_completed_at"
+                                type="date"
+                                value={data.completed_at}
+                                onChange={(e) => setData('completed_at', e.target.value)}
+                                className="mt-1.5 block w-full text-xs tabular-nums"
+                            />
+                            <InputError message={errors.completed_at} className="mt-1" />
+                        </div>
 
-                            {/* Footer Buttons */}
-                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-zinc-800">
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedLogToUpdate(null)}
-                                    className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition cursor-pointer shadow-2xs"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="px-5 py-2 rounded-xl bg-[#026eff] text-white text-xs font-semibold hover:bg-[#0256cc] shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <RiCheckLine className="w-3.5 h-3.5" />
-                                    <span>{processing ? 'Saving...' : 'Save Assessment'}</span>
-                                </button>
-                            </div>
-                        </form>
+                        <div>
+                            <InputLabel htmlFor="maint_assessment" value="Post-Repair Performance Assessment" />
+                            <textarea
+                                id="maint_assessment"
+                                rows={3}
+                                value={data.performance_assessment}
+                                onChange={(e) => setData('performance_assessment', e.target.value)}
+                                placeholder="Document benchmark stability, thermal health, or replaced parts..."
+                                className="mt-1.5 block w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 py-2 px-3 focus:outline-none focus:border-[#026eff] focus:ring-0"
+                            />
+                            <InputError message={errors.performance_assessment} className="mt-1" />
+                        </div>
+
+                        {data.status === 'completed' &&
+                            selectedLogToUpdate?.device?.lifecycle_stage === 'maintenance' && (
+                                <label className="flex items-start gap-2.5 p-3 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 cursor-pointer">
+                                    <Checkbox
+                                        checked={data.restore_to_available}
+                                        onChange={(e) => setData('restore_to_available', e.target.checked)}
+                                        className="mt-0.5"
+                                    />
+                                    <div>
+                                        <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                                            Return device to Deployment Pool
+                                        </div>
+                                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                            Moves unit out of the service bay and restores it to Available or Assigned status.
+                                        </p>
+                                    </div>
+                                </label>
+                            )}
                     </div>
-                </div>
-            )}
+
+                    <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-2">
+                        <SecondaryButton type="button" onClick={closeUpdateModal}>
+                            Cancel
+                        </SecondaryButton>
+                        <PrimaryButton type="submit" disabled={processing}>
+                            {processing ? 'Updating...' : 'Save Servicing Log'}
+                        </PrimaryButton>
+                    </div>
+                </form>
+            </Modal>
         </AuthenticatedLayout>
     );
 }

@@ -56,7 +56,29 @@ class Employee extends Model
 
     public function activeAssignment(): HasOne
     {
-        return $this->hasOne(Assignment::class)->whereNull('unassigned_at');
+        return $this->hasOne(Assignment::class)
+            ->whereNull('unassigned_at')
+            ->orderByRaw("CASE WHEN EXISTS (SELECT 1 FROM devices WHERE devices.id = assignments.device_id AND devices.device_type IN ('laptop', 'desktop')) THEN 0 ELSE 1 END ASC")
+            ->orderByDesc('assigned_at');
+    }
+
+    public function activeAssignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class)
+            ->whereNull('unassigned_at')
+            ->orderByDesc('assigned_at');
+    }
+
+    public function licenseAssignments(): HasMany
+    {
+        return $this->hasMany(SoftwareLicenseAssignment::class);
+    }
+
+    public function activeLicenseAssignments(): HasMany
+    {
+        return $this->hasMany(SoftwareLicenseAssignment::class)
+            ->whereNull('revoked_at')
+            ->orderByDesc('assigned_at');
     }
 
     public function getCurrentDeviceAttribute(): ?Device

@@ -26,7 +26,7 @@ export function ExpandableCardContainer({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-slate-900/60 dark:bg-black/75 backdrop-blur-sm h-full w-full z-50"
+                        className="fixed inset-0 bg-zinc-950/50 backdrop-blur-xs h-full w-full z-50"
                     />
                 )}
             </AnimatePresence>
@@ -37,19 +37,19 @@ export function ExpandableCardContainer({
                         <motion.div
                             layoutId={`card-${active.id}`}
                             ref={activeRef}
-                            className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-3xl overflow-hidden shadow-2xl relative my-8"
+                            className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-sm overflow-hidden relative my-8"
                         >
                             <motion.button
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 onClick={() => setActive(null)}
-                                className="absolute top-4 right-4 z-20 flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 transition"
+                                className="absolute top-4 right-4 z-20 flex items-center justify-center w-8 h-8 rounded-sm border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                             >
-                                <RiCloseLine className="w-5 h-5" />
+                                <RiCloseLine className="w-4 h-4" />
                             </motion.button>
 
-                            <div className="p-6 sm:p-8">
+                            <div className="p-6">
                                 {renderExpanded(active, () => setActive(null))}
                             </div>
                         </motion.div>

@@ -37,7 +37,9 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-3.1-flash-lite'),
+        'model' => env('GEMINI_MODEL', 'gemini-4-hydrogen'),
+        'thinking_level' => env('GEMINI_THINKING_LEVEL', 'low'),
+        'demo_offline' => filter_var(env('GEMINI_DEMO_OFFLINE', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
     'google' => [

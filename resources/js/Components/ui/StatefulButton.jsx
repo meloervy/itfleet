@@ -101,10 +101,10 @@ export function StatefulButton({
     };
 
     const variantStyles = {
-        primary: 'bg-[#026eff] hover:bg-[#0256cc] active:bg-[#024cb5] text-white shadow-xs',
-        emerald: 'bg-[#0aceb3] hover:bg-[#09b69e] active:bg-[#089f8a] text-slate-950 font-bold shadow-xs',
-        danger: 'bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white shadow-xs',
-        amber: 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold shadow-xs',
+        primary: 'border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] active:bg-[#024eb8] text-white',
+        emerald: 'border-emerald-600 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-medium',
+        danger: 'border-rose-600 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white',
+        amber: 'border-amber-500 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-medium',
     };
 
     return (
@@ -114,7 +114,7 @@ export function StatefulButton({
             disabled={disabled || isActing}
             onClick={handleClick}
             className={cn(
-                'inline-flex min-w-[110px] cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold tracking-wide transition duration-150 disabled:opacity-60 disabled:cursor-not-allowed',
+                'inline-flex min-w-[100px] cursor-pointer items-center justify-center gap-1.5 rounded-sm border px-3.5 py-2 text-xs font-medium transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed',
                 variantStyles[variant] || variantStyles.primary,
                 className,
             )}

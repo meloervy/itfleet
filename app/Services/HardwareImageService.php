@@ -82,6 +82,9 @@ class HardwareImageService
         'custom-ai-rig' => '/images/devices/custom-ai-rig.jpg',
         'default-laptop' => '/images/devices/default-laptop.jpg',
         'default-desktop' => '/images/devices/default-desktop.jpg',
+        'default-monitor' => '/images/devices/default-monitor.svg',
+        'default-mobile' => '/images/devices/default-mobile.svg',
+        'default-peripheral' => '/images/devices/default-peripheral.svg',
     ];
 
     /**
@@ -90,6 +93,18 @@ class HardwareImageService
     public static function resolvePublicAssetImage(?string $brand, ?string $model, ?string $deviceType = 'laptop'): ?string
     {
         $deviceType = $deviceType ?: 'laptop';
+        $typeLower = strtolower(trim($deviceType));
+
+        if ($typeLower === 'monitor') {
+            return self::$publicAssets['default-monitor'];
+        }
+        if ($typeLower === 'mobile') {
+            return self::$publicAssets['default-mobile'];
+        }
+        if ($typeLower === 'peripheral') {
+            return self::$publicAssets['default-peripheral'];
+        }
+
         $brandLower = strtolower(trim($brand ?? ''));
         $modelLower = strtolower(trim($model ?? ''));
         $combined = "{$brandLower} {$modelLower}";
@@ -252,11 +267,13 @@ class HardwareImageService
         }
 
         // 3. Fallback based on device type
-        if ($device->device_type === 'desktop') {
-            return self::$publicAssets['default-desktop'];
-        }
-
-        return self::$publicAssets['default-laptop'];
+        return match ($device->device_type) {
+            'desktop' => self::$publicAssets['default-desktop'],
+            'monitor' => self::$publicAssets['default-monitor'],
+            'mobile' => self::$publicAssets['default-mobile'],
+            'peripheral' => self::$publicAssets['default-peripheral'],
+            default => self::$publicAssets['default-laptop'],
+        };
     }
 
     /**
@@ -371,7 +388,7 @@ class HardwareImageService
             try {
                 $encodedTerm = urlencode(str_replace(' ', '_', $term));
                 $response = Http::withHeaders([
-                    'User-Agent' => 'SpecMatch-ITAM/1.0 (IT Asset Management System; contact@specmatch.local)',
+                    'User-Agent' => 'ITFleet-ITAM/1.0 (IT Asset Management System; contact@itfleet.local)',
                     'Accept' => 'application/json',
                 ])->timeout(5)->get("https://en.wikipedia.org/api/rest_v1/page/summary/{$encodedTerm}");
 

@@ -1,14 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import {
+    RiComputerLine,
+    RiMacbookLine,
+    RiSmartphoneLine,
+    RiTv2Line,
+    RiKeyboardLine,
+} from 'react-icons/ri';
 
 /**
  * Maps known device models/URLs to local static image assets.
  * Guarantees instant 0ms rendering and eliminates external hotlink (403) failures.
  */
 function resolveLocalAsset(url, alt = '') {
-    if (!url) return null;
-    if (url.startsWith('/images/devices/')) return url;
+    if (url && url.startsWith('/images/devices/')) return url;
 
-    const text = `${url} ${alt}`.toLowerCase();
+    const text = `${url || ''} ${alt}`.toLowerCase().trim();
+    if (!text) return url || null;
 
     if (text.includes('macbook_pro') || text.includes('macbook pro') || text.includes('macbook-pro') || text.includes('mac studio') || text.includes('imac')) {
         return '/images/devices/apple-macbook-pro.jpg';
@@ -37,8 +44,11 @@ function resolveLocalAsset(url, alt = '') {
     if (text.includes('precision')) {
         return '/images/devices/dell-precision.jpg';
     }
-    if (text.includes('optiplex') || text.includes('prodesk') || text.includes('elitedesk')) {
+    if (text.includes('optiplex')) {
         return '/images/devices/dell-optiplex.jpg';
+    }
+    if (text.includes('prodesk') || text.includes('elitedesk')) {
+        return '/images/devices/hp-prodesk.jpg';
     }
     if (text.includes('elitebook')) {
         return '/images/devices/hp-elitebook.jpg';
@@ -56,7 +66,16 @@ function resolveLocalAsset(url, alt = '') {
         return '/images/devices/custom-ai-rig.jpg';
     }
 
-    return url;
+    return url || null;
+}
+
+function FallbackDeviceIcon({ deviceType }) {
+    const iconClass = 'w-5 h-5 text-zinc-400 dark:text-zinc-500';
+    if (deviceType === 'laptop') return <RiMacbookLine className={iconClass} />;
+    if (deviceType === 'monitor') return <RiTv2Line className={iconClass} />;
+    if (deviceType === 'mobile') return <RiSmartphoneLine className={iconClass} />;
+    if (deviceType === 'peripheral') return <RiKeyboardLine className={iconClass} />;
+    return <RiComputerLine className={iconClass} />;
 }
 
 export default function HardwareImage({
@@ -68,24 +87,47 @@ export default function HardwareImage({
     ...props
 }) {
     const [hasError, setHasError] = useState(false);
+    const [fallbackFailed, setFallbackFailed] = useState(false);
+
+    useEffect(() => {
+        setHasError(false);
+        setFallbackFailed(false);
+    }, [src, alt, deviceType]);
 
     const defaultFallback = fallbackSrc || (
         deviceType === 'desktop'
             ? '/images/devices/default-desktop.jpg'
+            : deviceType === 'monitor'
+            ? '/images/devices/default-monitor.svg'
+            : deviceType === 'mobile'
+            ? '/images/devices/default-mobile.svg'
+            : deviceType === 'peripheral'
+            ? '/images/devices/default-peripheral.svg'
             : '/images/devices/default-laptop.jpg'
     );
 
     const resolved = resolveLocalAsset(src, alt);
-    const imageSource = (!hasError && resolved) ? resolved : defaultFallback;
+    const imageSource = !hasError && resolved ? resolved : defaultFallback;
+
+    if (fallbackFailed || !imageSource) {
+        return (
+            <div className="w-full h-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800" aria-label={alt}>
+                <FallbackDeviceIcon deviceType={deviceType} />
+            </div>
+        );
+    }
 
     return (
         <img
             src={imageSource}
             alt={alt}
             loading="lazy"
+            decoding="async"
             onError={() => {
-                if (!hasError) {
+                if (!hasError && resolved && imageSource !== defaultFallback) {
                     setHasError(true);
+                } else {
+                    setFallbackFailed(true);
                 }
             }}
             className={`transition-opacity duration-200 ${className}`}

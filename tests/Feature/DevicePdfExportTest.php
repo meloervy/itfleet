@@ -47,6 +47,6 @@ class DevicePdfExportTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertHeader('content-type', 'application/pdf');
-        $this->assertStringContainsString('specmatch-itam-inventory-', $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('itfleet-itam-inventory-', $response->headers->get('content-disposition'));
     }
 }

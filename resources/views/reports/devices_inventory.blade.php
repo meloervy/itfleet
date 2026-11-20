@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SpecMatch ITAM - Enterprise Asset Inventory Audit</title>
+    <title>ITFleet ITAM - Enterprise Asset Inventory Audit</title>
     <style>
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -93,7 +93,7 @@
         <table style="width: 100%;">
             <tr>
                 <td>
-                    <div class="title">SpecMatch ITAM — Enterprise Asset Inventory & Audit Report</div>
+                    <div class="title">ITFleet ITAM — Enterprise Asset Inventory & Audit Report</div>
                     <div class="subtitle">Philippine Enterprise Hardware Optimization & Lifecycle Tracking</div>
                 </td>
                 <td style="text-align: right; vertical-align: top;">
@@ -142,7 +142,7 @@
                     <td>
                         <strong>{{ $device->brand }} {{ $device->model }}</strong><br>
                         <span style="color: #64748b; font-size: 8px;">
-                            {{ $device->cpu }} &bull; {{ $device->ram_gb }}GB RAM &bull; {{ $device->storage_gb }}GB {{ $device->storage_type }}
+                            {{ $device->spec_summary }}
                         </span>
                     </td>
                     <td>
@@ -173,7 +173,7 @@
     </table>
 
     <div class="footer">
-        Generated automatically by SpecMatch Enterprise ITAM Platform &bull; ISO 19770-1 IT Asset Compliance Standard &bull; Page 1 of 1
+        Generated automatically by ITFleet Enterprise ITAM Platform &bull; ISO 19770-1 IT Asset Compliance Standard &bull; Page 1 of 1
     </div>
 </body>
 </html>

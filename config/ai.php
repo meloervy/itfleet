@@ -39,6 +39,10 @@ return [
         ],
     ],
 
+    'conversations' => [
+        'generate_title' => false,
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | AI Providers
@@ -103,11 +107,12 @@ return [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
             'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
+            'thinking_level' => env('GEMINI_THINKING_LEVEL', 'low'),
             'models' => [
                 'text' => [
-                    'default' => env('GEMINI_MODEL', 'gemini-3.1-flash-lite'),
-                    'smartest' => env('GEMINI_SMARTEST_MODEL', 'gemini-3.1-flash-lite'),
-                    'cheapest' => env('GEMINI_CHEAPEST_MODEL', 'gemini-3.1-flash-lite'),
+                    'default' => env('GEMINI_MODEL', 'gemini-4-hydrogen'),
+                    'smartest' => env('GEMINI_SMARTEST_MODEL', 'gemini-4-hydrogen'),
+                    'cheapest' => env('GEMINI_CHEAPEST_MODEL', 'gemini-4-hydrogen'),
                 ],
             ],
         ],

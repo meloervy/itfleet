@@ -42,19 +42,19 @@ export default function Modal({
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" />
+                    <div className="absolute inset-0 bg-zinc-950/50 backdrop-blur-xs" />
                 </TransitionChild>
 
                 <TransitionChild
-                    enter="ease-out duration-300"
-                    enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                    enter="ease-out duration-200"
+                    enterFrom="opacity-0 translate-y-2 sm:translate-y-0 sm:scale-98"
                     enterTo="opacity-100 translate-y-0 sm:scale-100"
-                    leave="ease-in duration-200"
+                    leave="ease-in duration-150"
                     leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-                    leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                    leaveTo="opacity-0 translate-y-2 sm:translate-y-0 sm:scale-98"
                 >
                     <DialogPanel
-                        className={`mb-6 transform overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl transition-all sm:mx-auto sm:w-full ${maxWidthClass}`}
+                        className={`mb-6 transform overflow-hidden rounded-sm bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 transition-all sm:mx-auto sm:w-full ${maxWidthClass}`}
                     >
                         {children}
                     </DialogPanel>

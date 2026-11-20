@@ -34,6 +34,7 @@
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="GEMINI_DEMO_OFFLINE" value="true"/>
         <env name="GEMINI_API_KEY" value=""/>
-        <env name="GEMINI_MODEL" value="gemini-3.1-flash-lite"/>
+        <env name="GEMINI_MODEL" value="gemini-4-hydrogen"/>
+        <env name="ITFLEET_DEMO_MODE" value="false"/>
     </php>
 </phpunit>

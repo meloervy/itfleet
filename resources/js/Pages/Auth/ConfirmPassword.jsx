@@ -22,13 +22,18 @@ export default function ConfirmPassword() {
         <GuestLayout>
             <Head title="Confirm Password" />
 
-            <div className="mb-4 text-sm text-gray-600">
-                This is a secure area of the application. Please confirm your
-                password before continuing.
+            <div className="mb-4">
+                <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                    Confirm password
+                </h1>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    This is a secure area of the application. Please confirm your
+                    password before continuing.
+                </p>
             </div>
 
-            <form onSubmit={submit}>
-                <div className="mt-4">
+            <form onSubmit={submit} className="space-y-4">
+                <div>
                     <InputLabel htmlFor="password" value="Password" />
 
                     <TextInput
@@ -36,16 +41,16 @@ export default function ConfirmPassword() {
                         type="password"
                         name="password"
                         value={data.password}
-                        className="mt-1 block w-full"
+                        className="mt-1.5 block w-full text-xs sm:text-sm"
                         isFocused={true}
                         onChange={(e) => setData('password', e.target.value)}
                     />
 
-                    <InputError message={errors.password} className="mt-2" />
+                    <InputError message={errors.password} className="mt-1" />
                 </div>
 
-                <div className="mt-4 flex items-center justify-end">
-                    <PrimaryButton className="ms-4" disabled={processing}>
+                <div className="pt-2 flex items-center justify-end">
+                    <PrimaryButton disabled={processing}>
                         Confirm
                     </PrimaryButton>
                 </div>

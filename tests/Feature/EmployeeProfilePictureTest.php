@@ -137,4 +137,33 @@ class EmployeeProfilePictureTest extends TestCase
             @unlink($filePath);
         }
     }
+
+    public function test_svg_profile_picture_upload_is_rejected(): void
+    {
+        $svg = UploadedFile::fake()->createWithContent(
+            'malicious.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        );
+
+        $response = $this->actingAs($this->user)->post('/employees', [
+            'name' => 'SVG Attacker',
+            'department' => 'Security',
+            'profile_picture_file' => $svg,
+        ]);
+
+        $response->assertSessionHasErrors('profile_picture_file');
+        $this->assertDatabaseMissing('employees', ['name' => 'SVG Attacker']);
+    }
+
+    public function test_unsafe_profile_picture_string_scheme_is_rejected(): void
+    {
+        $response = $this->actingAs($this->user)->post('/employees', [
+            'name' => 'Scheme Attacker',
+            'department' => 'Security',
+            'profile_picture' => 'javascript:alert(1)',
+        ]);
+
+        $response->assertSessionHasErrors('profile_picture');
+        $this->assertDatabaseMissing('employees', ['name' => 'Scheme Attacker']);
+    }
 }

@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import HardwareImage from '@/Components/HardwareImage';
-import SpecMatchLogo from '@/Components/SpecMatchLogo';
-import SpecMatchMascot from '@/Components/SpecMatchMascot';
 import {
     RiSendPlaneFill,
     RiCloseLine,
@@ -21,6 +19,14 @@ import {
     RiArrowUpSLine,
     RiPencilLine,
     RiDeleteBinLine,
+    RiSparklingLine,
+    RiHistoryLine,
+    RiAddLine,
+    RiDatabase2Line,
+    RiKey2Line,
+    RiUserLine,
+    RiLockLine,
+    RiEyeLine,
 } from 'react-icons/ri';
 
 /**
@@ -32,7 +38,7 @@ function renderFormattedText(text) {
     return parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
             return (
-                <strong key={i} className="font-bold text-slate-900 dark:text-zinc-100">
+                <strong key={i} className="font-semibold text-zinc-900 dark:text-zinc-100">
                     {part.slice(2, -2)}
                 </strong>
             );
@@ -41,7 +47,7 @@ function renderFormattedText(text) {
             return (
                 <code
                     key={i}
-                    className="px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-zinc-800 text-[11px] font-mono text-[#026eff] dark:text-[#38bdf8]"
+                    className="px-1.5 py-0.5 rounded-sm bg-zinc-100 dark:bg-zinc-800 text-[11px] font-mono text-[#026eff] dark:text-sky-400"
                 >
                     {part.slice(1, -1)}
                 </code>
@@ -106,7 +112,14 @@ function MarkdownRenderer({ content }) {
         // Blockquote (> )
         if (trimmed.startsWith('> ') || trimmed === '>') {
             const quoteLines = [];
-            while (i < lines.length && (lines[i].trim().startsWith('>') || (quoteLines.length > 0 && lines[i].trim() !== '' && !lines[i].trim().startsWith('#') && !lines[i].trim().startsWith('|')))) {
+            while (
+                i < lines.length &&
+                (lines[i].trim().startsWith('>') ||
+                    (quoteLines.length > 0 &&
+                        lines[i].trim() !== '' &&
+                        !lines[i].trim().startsWith('#') &&
+                        !lines[i].trim().startsWith('|')))
+            ) {
                 quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
                 i++;
             }
@@ -117,7 +130,6 @@ function MarkdownRenderer({ content }) {
             continue;
         }
 
-        // Headers
         if (trimmed.startsWith('### ')) {
             blocks.push({ type: 'h4', text: trimmed.replace(/^###\s+/, '') });
             i++;
@@ -129,46 +141,43 @@ function MarkdownRenderer({ content }) {
             continue;
         }
 
-        // Bullet lists
         if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
             blocks.push({ type: 'bullet', text: trimmed.substring(2) });
             i++;
             continue;
         }
 
-        // Horizontal rule
         if (trimmed === '---') {
             blocks.push({ type: 'hr' });
             i++;
             continue;
         }
 
-        // Regular paragraph
         blocks.push({ type: 'p', text: trimmed });
         i++;
     }
 
     return (
-        <div className="space-y-2 text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-zinc-200">
+        <div className="space-y-2 text-xs sm:text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
             {blocks.map((block, bIdx) => {
                 if (block.type === 'table') {
                     return (
-                        <div key={bIdx} className="overflow-x-auto my-2.5 rounded-xl border border-slate-200/90 dark:border-zinc-700/80 shadow-2xs">
+                        <div key={bIdx} className="overflow-x-auto my-2 rounded-sm border border-zinc-200 dark:border-zinc-800">
                             <table className="w-full text-left border-collapse text-xs">
                                 <thead>
-                                    <tr className="bg-slate-100/90 dark:bg-zinc-800 border-b border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200">
+                                    <tr className="bg-zinc-50 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200">
                                         {block.headers.map((h, hIdx) => (
-                                            <th key={hIdx} className="px-2.5 py-2 font-bold whitespace-nowrap">
+                                            <th key={hIdx} className="px-2.5 py-2 font-medium whitespace-nowrap">
                                                 {renderFormattedText(h)}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900/60">
+                                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900">
                                     {block.rows.map((row, rIdx) => (
-                                        <tr key={rIdx} className="hover:bg-slate-50/80 dark:hover:bg-zinc-800/40 transition">
+                                        <tr key={rIdx} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition">
                                             {row.map((cell, cIdx) => (
-                                                <td key={cIdx} className="px-2.5 py-2 text-slate-700 dark:text-zinc-300">
+                                                <td key={cIdx} className="px-2.5 py-2 text-zinc-600 dark:text-zinc-300">
                                                     {renderFormattedText(cell)}
                                                 </td>
                                             ))}
@@ -182,7 +191,10 @@ function MarkdownRenderer({ content }) {
 
                 if (block.type === 'blockquote') {
                     return (
-                        <div key={bIdx} className="p-3 my-2 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-amber-500 text-xs text-amber-900 dark:text-amber-200 leading-normal">
+                        <div
+                            key={bIdx}
+                            className="px-3 py-2 my-2 rounded-sm bg-amber-500/10 border border-amber-500/40 text-xs text-amber-900 dark:text-amber-200 leading-normal"
+                        >
                             {renderFormattedText(block.text)}
                         </div>
                     );
@@ -190,7 +202,7 @@ function MarkdownRenderer({ content }) {
 
                 if (block.type === 'h4') {
                     return (
-                        <h4 key={bIdx} className="font-extrabold text-sm text-slate-900 dark:text-zinc-100 pt-1.5 pb-0.5">
+                        <h4 key={bIdx} className="font-semibold text-[13px] text-zinc-900 dark:text-zinc-100 pt-1 pb-0.5">
                             {renderFormattedText(block.text)}
                         </h4>
                     );
@@ -198,7 +210,7 @@ function MarkdownRenderer({ content }) {
 
                 if (block.type === 'h3') {
                     return (
-                        <h3 key={bIdx} className="font-extrabold text-base text-slate-900 dark:text-zinc-100 pt-2 pb-1">
+                        <h3 key={bIdx} className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 pt-1.5 pb-0.5">
                             {renderFormattedText(block.text)}
                         </h3>
                     );
@@ -206,15 +218,15 @@ function MarkdownRenderer({ content }) {
 
                 if (block.type === 'bullet') {
                     return (
-                        <div key={bIdx} className="flex items-start gap-2 pl-2">
-                            <span className="text-[#026eff] dark:text-[#38bdf8] font-bold shrink-0">•</span>
+                        <div key={bIdx} className="flex items-start gap-2 pl-1.5">
+                            <span className="text-[#026eff] dark:text-sky-400 shrink-0">&bull;</span>
                             <div className="flex-1">{renderFormattedText(block.text)}</div>
                         </div>
                     );
                 }
 
                 if (block.type === 'hr') {
-                    return <hr key={bIdx} className="border-slate-200/80 dark:border-zinc-800 my-2" />;
+                    return <hr key={bIdx} className="border-zinc-200/80 dark:border-zinc-800 my-2" />;
                 }
 
                 return <p key={bIdx}>{renderFormattedText(block.text)}</p>;
@@ -223,85 +235,124 @@ function MarkdownRenderer({ content }) {
     );
 }
 
-const defaultWelcomeMessage = {
-    id: 'welcome',
+const buildWelcomeMessage = (followups = [], isTechnician = false) => ({
+    id: 'welcome_' + Date.now(),
     sender: 'assistant',
     category: 'general_itam',
-    source: 'gemini-3.1-flash-lite',
+    source: 'local_db_engine',
+    tool_trace: [],
     answer:
-        "### Fukurou - SpecMatch AI Fleet Assistant\n\n" +
-        "Kumusta! I am **Fukurou**, your official conversational ITAM Fleet Assistant. Ask me any question regarding stockroom inventory, idle devices, employee spec tiers, or warranties in **English or Tagalog**.",
+        '### ITFleet Analytics Copilot (Read-Only)\n\n' +
+        'Ask questions across laptops, desktops, monitors, mobile devices, peripherals, employee custody, software licenses, maintenance, and mismatches in **English or Tagalog**.' +
+        (isTechnician ? ' *(Financial valuation is restricted for Technician role.)*' : ''),
     data_cards: [],
-    suggested_followups: [
-        'Which employees are using low end specs?',
-        'How many idle devices do we currently have in inventory?',
-        'Who is using the high end desktop?',
-        'Which employees is using the high end computers?',
-    ],
-};
+    suggested_followups:
+        followups.length > 0
+            ? followups
+            : isTechnician
+            ? [
+                  'Which devices are currently undergoing repairs and maintenance?',
+                  'Which hardware warranties expire in the next 60 days?',
+                  'How many idle devices do we currently have in inventory?',
+                  'Which software licenses are near capacity or expiring soon?',
+              ]
+            : [
+                  'Which employees are using low end specs?',
+                  'How many idle devices do we currently have in inventory?',
+                  'Show software license seat utilization and upcoming renewals',
+                  'What is our total fleet acquisition cost and current book value?',
+              ],
+});
 
-export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }) {
+export default function GeminiFleetAssistant({ isOpen = false, showFloatingTrigger = true, onClose, onOpen, pageContext = null }) {
+    const { auth, demo } = usePage().props;
+    const user = auth?.user;
+    const isAdminOrManager = ['admin', 'manager'].includes(user?.role);
+    const isTechnician = user?.role === 'technician';
+
     const [isFloatingOpen, setIsFloatingOpen] = useState(isOpen);
     const [isMaximized, setIsMaximized] = useState(false);
-    const [messages, setMessages] = useState([defaultWelcomeMessage]);
+    const [showThreadsDrawer, setShowThreadsDrawer] = useState(false);
+    const [conversations, setConversations] = useState([]);
+    const [conversationId, setConversationId] = useState(null);
+    const [starterFollowups, setStarterFollowups] = useState([]);
+    const [messages, setMessages] = useState(() => [buildWelcomeMessage([], isTechnician)]);
     const [inputPrompt, setInputPrompt] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [starterFollowups, setStarterFollowups] = useState([]);
+    const [isLoadingThread, setIsLoadingThread] = useState(false);
     const [collapsedMessages, setCollapsedMessages] = useState({});
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [aiStatus, setAiStatus] = useState({
-        state: 'online',
-        model: 'gemini-3.1-flash-lite',
-        label: 'Gemini 3.1 Flash-Lite Active',
-        sublabel: 'Online',
-        tooltip: 'Gemini 3.1 Flash-Lite is online and grounded in real-time MySQL database context.',
-        is_fallback: false,
+        state: 'offline',
+        model: 'gemini-4-hydrogen',
+        model_label: 'Gemini 4 Hydrogen',
+        label: 'Local DB Engine Active',
+        sublabel: 'Offline Mode',
+        tooltip: 'Initializing fleet copilot status...',
+        is_fallback: true,
+        needs_api_key: true,
     });
 
-    // Customizable window sizing with constraints
     const [windowSize, setWindowSize] = useState(() => {
         try {
-            const saved = localStorage.getItem('specmatch_fleet_assistant_size');
+            const saved = localStorage.getItem('itfleet_fleet_assistant_size');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (parsed.width && parsed.height) return parsed;
             }
         } catch (e) {}
-        return { width: 540, height: 650 };
+        return { width: 560, height: 660 };
     });
 
     const scrollContainerRef = useRef(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
-    // Save size preference
     useEffect(() => {
         try {
-            localStorage.setItem('specmatch_fleet_assistant_size', JSON.stringify(windowSize));
+            localStorage.setItem('itfleet_fleet_assistant_size', JSON.stringify(windowSize));
         } catch (e) {}
     }, [windowSize]);
 
-    // Sync external isOpen prop changes
     useEffect(() => {
         setIsFloatingOpen(isOpen);
     }, [isOpen]);
 
-    // Initial context fetch on mount
-    useEffect(() => {
-        axios
-            .get(route('fleet-assistant.context'))
-            .then((res) => {
-                if (res.data?.starter_followups) {
-                    setStarterFollowups(res.data.starter_followups);
-                }
-                if (res.data?.ai_status) {
-                    setAiStatus(res.data.ai_status);
-                }
-            })
-            .catch(() => {});
-    }, []);
+    const fetchContext = async () => {
+        try {
+            const res = await axios.get(route('fleet-assistant.context'));
+            const followups = res.data?.starter_followups || [];
+            setStarterFollowups(followups);
+            if (res.data?.ai_status) {
+                setAiStatus(res.data.ai_status);
+            }
+            if (Array.isArray(res.data?.conversations)) {
+                setConversations(res.data.conversations);
+            }
+            return followups;
+        } catch (e) {
+            return [];
+        }
+    };
 
-    // Focus input and listen for ESC key when window opens
+    // Refresh context, RBAC starter followups, and conversation threads whenever user or preset changes
+    useEffect(() => {
+        let active = true;
+        setConversationId(null);
+        setShowThreadsDrawer(false);
+        setCollapsedMessages({});
+
+        fetchContext().then((followups) => {
+            if (active) {
+                setMessages([buildWelcomeMessage(followups, isTechnician)]);
+            }
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [user?.id, user?.role, demo?.active_preset]);
+
     useEffect(() => {
         if (isFloatingOpen) {
             setTimeout(() => {
@@ -328,7 +379,6 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         if (onOpen) onOpen();
     };
 
-    // Track scroll to toggle "Skip to bottom" button
     const handleScroll = () => {
         if (!scrollContainerRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
@@ -340,7 +390,6 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // FAQ dropdown toggle
     const toggleCollapse = (msgId) => {
         setCollapsedMessages((prev) => ({
             ...prev,
@@ -348,7 +397,6 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         }));
     };
 
-    // Unsend (delete) user message and its following response
     const handleUnsendMessage = (msgId) => {
         setMessages((prev) => {
             const index = prev.findIndex((m) => m.id === msgId);
@@ -362,7 +410,6 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         });
     };
 
-    // Edit user message (places text in input, undos message & response, focuses input)
     const handleEditMessage = (msgId) => {
         const msg = messages.find((m) => m.id === msgId);
         if (!msg) return;
@@ -372,31 +419,47 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         setTimeout(() => inputRef.current?.focus(), 50);
     };
 
-    // Reset conversation
-    const handleClearChat = () => {
-        setMessages([
-            {
-                id: 'welcome_reset_' + Date.now(),
-                sender: 'assistant',
-                category: 'general_itam',
-                source: 'gemini-3.1-flash-lite',
-                answer:
-                    "Conversation reset. Ask me anything about our Metro Manila IT fleet, stockroom availability, who is using high-end computers, or warranties.",
-                data_cards: [],
-                suggested_followups: starterFollowups.length > 0 ? starterFollowups : [
-                    'Which employees are using low end specs?',
-                    'How many idle devices do we currently have in inventory?',
-                    'Who is using the high end desktop?',
-                    'Which employees is using the high end computers?',
-                ],
-            },
-        ]);
+    const handleNewConversation = () => {
+        setConversationId(null);
+        setShowThreadsDrawer(false);
+        setMessages([buildWelcomeMessage(starterFollowups, isTechnician)]);
         setInputPrompt('');
         setIsLoading(false);
         setCollapsedMessages({});
+        setTimeout(() => inputRef.current?.focus(), 100);
     };
 
-    // Send query with multi-turn conversation memory history
+    const handleLoadConversation = async (targetConvId) => {
+        if (isLoadingThread) return;
+        setIsLoadingThread(true);
+        try {
+            const res = await axios.get(route('fleet-assistant.conversations.show', { conversationId: targetConvId }));
+            const loadedMessages = res.data?.messages || [];
+            setConversationId(targetConvId);
+            setMessages(
+                loadedMessages.length > 0
+                    ? loadedMessages
+                    : [buildWelcomeMessage(starterFollowups, isTechnician)]
+            );
+            setShowThreadsDrawer(false);
+            setCollapsedMessages({});
+        } catch (e) {
+        } finally {
+            setIsLoadingThread(false);
+        }
+    };
+
+    const handleDeleteConversation = async (e, targetConvId) => {
+        e.stopPropagation();
+        try {
+            await axios.delete(route('fleet-assistant.conversations.destroy', { conversationId: targetConvId }));
+            setConversations((prev) => prev.filter((c) => c.id !== targetConvId));
+            if (conversationId === targetConvId) {
+                handleNewConversation();
+            }
+        } catch (err) {}
+    };
+
     const handleSend = async (queryText) => {
         const textToSend = (queryText || inputPrompt).trim();
         if (!textToSend || isLoading) return;
@@ -410,7 +473,7 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         };
 
         const history = messages
-            .filter((m) => !m.id.startsWith('welcome'))
+            .filter((m) => !String(m.id).startsWith('welcome'))
             .slice(-8)
             .map((m) => ({
                 role: m.sender === 'user' ? 'user' : 'assistant',
@@ -419,9 +482,9 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
 
         setMessages((prev) => [...prev, userMsg]);
         setInputPrompt('');
+        setShowThreadsDrawer(false);
         setIsLoading(true);
 
-        // Keep view anchored on user question / top of new response
         setTimeout(() => {
             const userEl = document.getElementById(userMsgId);
             if (userEl) {
@@ -432,25 +495,40 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         try {
             const response = await axios.post(route('fleet-assistant.query'), {
                 prompt: textToSend,
-                history: history,
+                conversation_id: conversationId,
+                page_context: pageContext,
+                history,
             });
 
             const data = response.data;
             if (data.ai_status) {
                 setAiStatus(data.ai_status);
             }
+            if (data.conversation_id) {
+                setConversationId(data.conversation_id);
+                axios
+                    .get(route('fleet-assistant.conversations.index'))
+                    .then((r) => {
+                        if (Array.isArray(r.data?.conversations)) {
+                            setConversations(r.data.conversations);
+                        }
+                    })
+                    .catch(() => {});
+            }
+
             const assistantMsg = {
                 id: 'assistant_' + Date.now(),
                 sender: 'assistant',
                 category: data.category || 'general_itam',
-                source: data.source || 'gemini-3.1-flash-lite',
+                source: data.source || aiStatus.model || 'gemini-4-hydrogen',
+                model_label: data.model_label || aiStatus.model_label,
+                tool_trace: data.tool_trace || [],
                 answer: data.answer || 'No response received from fleet assistant.',
                 data_cards: data.data_cards || [],
                 suggested_followups: data.suggested_followups || [],
             };
 
             setMessages((prev) => [...prev, assistantMsg]);
-            // Do not drag all the way to bottom - stays anchored on question so user can read top-down
         } catch (error) {
             const status = error.response?.status;
             const isAuth = status === 401 || status === 419;
@@ -459,16 +537,14 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
                 sender: 'assistant',
                 category: 'error',
                 source: 'system',
+                tool_trace: [],
                 isAuth,
                 loginUrl: error.response?.data?.login_url || '/login',
                 answer: isAuth
-                    ? 'Your session has expired (this occurs after an idle period or recent server redeployment). Please log in again to resume.'
-                    : 'Unable to process query. The server or network encountered an issue: ' +
-                      (error.response?.data?.message || error.message),
+                    ? 'Your session has expired. Please log in again to resume.'
+                    : 'Unable to process query: ' + (error.response?.data?.message || error.message),
                 data_cards: [],
-                suggested_followups: isAuth
-                    ? []
-                    : ['Which employees are using low end specs?', 'How many idle devices do we currently have in inventory?'],
+                suggested_followups: isAuth ? [] : starterFollowups.slice(0, 2),
             };
             setMessages((prev) => [...prev, errorMsg]);
         } finally {
@@ -477,7 +553,6 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         }
     };
 
-    // Resizing logic for non-maximized mode
     const handleResizeStart = (e, direction) => {
         e.preventDefault();
         e.stopPropagation();
@@ -525,21 +600,32 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
         window.addEventListener('mouseup', onMouseUp);
     };
 
+    const statusBadgeText =
+        aiStatus?.state === 'online'
+            ? aiStatus.model_label || 'Gemini 4 Hydrogen'
+            : aiStatus?.state === 'quota_exceeded' || aiStatus?.state === 'credit_exhausted'
+            ? 'Local DB Mode'
+            : aiStatus?.label || 'Local DB Engine';
+
+    const pageContextSummary = pageContext?.entity_label
+        ? `Asset: ${pageContext.entity_label}`
+        : pageContext?.component
+        ? `Page: ${pageContext.component.replace('/Index', '')}`
+        : null;
+
     return (
         <>
-            {/* Minimized Floating Launcher Bubble */}
-            {!isFloatingOpen && (
+            {/* Minimized Floating Launcher Bubble (optional; hidden when navbar trigger is used) */}
+            {showFloatingTrigger && !isFloatingOpen && (
                 <div className="fixed bottom-5 right-5 z-40">
                     <button
                         type="button"
                         onClick={handleOpen}
-                        className="group relative flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-white dark:bg-zinc-900 hover:bg-sky-50 dark:hover:bg-zinc-800 text-[#026EFC] dark:text-[#38bdf8] shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer border-2 border-[#026EFC] dark:border-[#026EFC]"
-                        title="Open ITAM Fleet Assistant"
+                        className="group relative flex items-center gap-2 px-3.5 py-2 rounded-sm border border-zinc-800 dark:border-zinc-200 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 transition-colors duration-150 cursor-pointer"
+                        title="Open Fleet Assistant (Ctrl+K)"
                     >
-                        <SpecMatchMascot variant="avatar" size={24} pose="greeting" showGlow={false} isOnline={true} />
-                        <span className="text-xs font-extrabold tracking-tight text-[#026EFC] dark:text-[#38bdf8] pr-0.5">
-                            Talk to Fleet
-                        </span>
+                        <RiSparklingLine className="w-3.5 h-3.5 text-sky-400 dark:text-[#026eff] shrink-0" />
+                        <span className="text-xs font-medium tracking-tight">Talk to Fleet</span>
                     </button>
                 </div>
             )}
@@ -549,8 +635,8 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
                 <div
                     className={
                         isMaximized
-                            ? 'fixed inset-0 z-50 w-screen h-screen max-w-none max-h-none rounded-none shadow-none bg-white dark:bg-zinc-900 border-none flex flex-col overflow-hidden font-sans'
-                            : 'fixed bottom-4 sm:bottom-5 right-4 sm:right-5 z-50 rounded-2xl shadow-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex flex-col overflow-hidden font-sans'
+                            ? 'fixed inset-0 z-50 w-screen h-screen max-w-none max-h-none rounded-sm bg-white dark:bg-zinc-900 border-none flex flex-col overflow-hidden font-sans'
+                            : 'fixed bottom-4 sm:bottom-5 right-4 sm:right-5 z-50 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 flex flex-col overflow-hidden font-sans'
                     }
                     style={
                         isMaximized
@@ -563,108 +649,99 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
                               }
                     }
                 >
-                    {/* Resizing Handles (only when not maximized) */}
                     {!isMaximized && (
                         <>
-                            {/* Top resize handle */}
                             <div
                                 onMouseDown={(e) => handleResizeStart(e, 'top')}
                                 className="absolute top-0 left-6 right-6 h-2 cursor-ns-resize z-30"
                                 title="Drag to adjust height"
                             />
-                            {/* Left resize handle */}
                             <div
                                 onMouseDown={(e) => handleResizeStart(e, 'left')}
                                 className="absolute top-6 left-0 bottom-6 w-2 cursor-ew-resize z-30"
                                 title="Drag to adjust width"
                             />
-                            {/* Top-Left resize corner grip */}
                             <div
                                 onMouseDown={(e) => handleResizeStart(e, 'top-left')}
-                                className="absolute top-0 left-0 w-6 h-6 cursor-nwse-resize z-40 group flex items-center justify-center p-1.5"
+                                className="absolute top-0 left-0 w-5 h-5 cursor-nwse-resize z-40 group flex items-center justify-center p-1"
                                 title="Drag to adjust width and height"
                             >
-                                <div className="w-2.5 h-2.5 border-t-2 border-l-2 border-slate-300 dark:border-zinc-600 group-hover:border-[#026eff] transition-colors rounded-tl" />
+                                <div className="w-2 h-2 border-t border-l border-zinc-300 dark:border-zinc-600 group-hover:border-[#026eff] transition-colors rounded-sm" />
                             </div>
                         </>
                     )}
 
                     {/* Window Header */}
-                    <div className="px-4 py-3 border-b border-slate-200/80 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/90 backdrop-blur-md shrink-0">
-                        <div className={`flex items-center justify-between gap-3 ${isMaximized ? 'max-w-4xl mx-auto w-full' : ''}`}>
+                    <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
+                        <div className={`flex items-center justify-between gap-2 ${isMaximized ? 'max-w-4xl mx-auto w-full' : ''}`}>
                             <div className="flex items-center gap-2.5 min-w-0">
-                                <SpecMatchMascot
-                                    variant="avatar"
-                                    size={32}
-                                    pose={isLoading ? 'thinking' : 'greeting'}
-                                    showGlow={true}
-                                    isOnline={aiStatus?.state === 'online'}
-                                />
+                                <div className="w-7 h-7 rounded-sm border border-[#026eff]/20 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 flex items-center justify-center shrink-0">
+                                    <RiSparklingLine className="w-3.5 h-3.5" />
+                                </div>
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <h3 className="font-extrabold text-slate-900 dark:text-zinc-100 text-sm tracking-tight truncate">
-                                            Fukurou &bull; Fleet Assistant
+                                        <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm tracking-tight truncate">
+                                            Fleet Assistant
                                         </h3>
-                                        {/* Live AI Status Pill */}
                                         {aiStatus && (
                                             <div
-                                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all ${
+                                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border text-[10px] font-medium transition-all ${
                                                     aiStatus.state === 'online'
-                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/80'
+                                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
                                                         : aiStatus.state === 'quota_exceeded'
-                                                        ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700'
-                                                        : aiStatus.state === 'credit_exhausted'
-                                                        ? 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-                                                        : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                                                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400'
+                                                        : 'bg-zinc-100 border-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
                                                 }`}
                                                 title={aiStatus.tooltip}
                                             >
                                                 <span
-                                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                    className={`w-1.5 h-1.5 rounded-sm shrink-0 ${
                                                         aiStatus.state === 'online'
-                                                            ? 'bg-emerald-500 animate-pulse'
+                                                            ? 'bg-emerald-500'
                                                             : aiStatus.state === 'quota_exceeded'
                                                             ? 'bg-amber-500'
-                                                            : aiStatus.state === 'credit_exhausted'
-                                                            ? 'bg-rose-500'
-                                                            : 'bg-slate-400'
+                                                            : 'bg-zinc-400'
                                                     }`}
                                                 />
-                                                <span className="truncate max-w-[140px] sm:max-w-[220px]">
-                                                    {aiStatus.state === 'online'
-                                                        ? 'Gemini 3.1 Flash-Lite Active'
-                                                        : aiStatus.state === 'quota_exceeded'
-                                                        ? 'Gemini Quota Limit (Local DB Active)'
-                                                        : aiStatus.state === 'credit_exhausted'
-                                                        ? 'Gemini Credits Out (Local DB Active)'
-                                                        : aiStatus.label || 'Local DB Engine Active'}
+                                                <span className="truncate max-w-[140px] sm:max-w-[200px]">
+                                                    {statusBadgeText}
                                                 </span>
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
-                                        {aiStatus?.is_fallback
-                                            ? 'Real-time MySQL DB engine active with 100% database accuracy'
-                                            : 'Ask about inventory, employee specs & mismatches'}
-                                    </p>
                                 </div>
                             </div>
 
-                            {/* Controls: Reset, Maximize/Restore, Minimize, Close */}
+                            {/* Header Controls */}
                             <div className="flex items-center gap-0.5 shrink-0">
                                 <button
                                     type="button"
-                                    onClick={handleClearChat}
-                                    title="Reset conversation"
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    onClick={() => setShowThreadsDrawer((prev) => !prev)}
+                                    title="Saved conversations"
+                                    className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-sm text-[11px] transition cursor-pointer ${
+                                        showThreadsDrawer
+                                            ? 'bg-zinc-100 dark:bg-zinc-800 text-[#026eff] dark:text-sky-400'
+                                            : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                                    }`}
                                 >
-                                    <RiRefreshLine className="w-4 h-4" />
+                                    <RiHistoryLine className="w-3.5 h-3.5" />
+                                    {conversations.length > 0 && (
+                                        <span className="font-mono text-[10px]">{conversations.length}</span>
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleNewConversation}
+                                    title="New conversation"
+                                    className="p-1.5 rounded-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                >
+                                    <RiAddLine className="w-4 h-4" />
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setIsMaximized((prev) => !prev)}
                                     title={isMaximized ? 'Restore window size' : 'Maximize to full page'}
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    className="p-1.5 rounded-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                 >
                                     {isMaximized ? (
                                         <RiFullscreenExitLine className="w-4 h-4" />
@@ -676,7 +753,7 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
                                     type="button"
                                     onClick={handleClose}
                                     title="Minimize to bubble"
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    className="p-1.5 rounded-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                 >
                                     <RiSubtractLine className="w-4 h-4" />
                                 </button>
@@ -684,260 +761,352 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
                                     type="button"
                                     onClick={handleClose}
                                     title="Close assistant"
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    className="p-1.5 rounded-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                 >
                                     <RiCloseLine className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
+
+                        {/* Live Context & RBAC Strip */}
+                        {(pageContextSummary || isTechnician) && (
+                            <div className={`mt-2 flex flex-wrap items-center gap-1.5 text-[10px] ${isMaximized ? 'max-w-4xl mx-auto w-full' : ''}`}>
+                                {pageContextSummary && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400">
+                                        <RiEyeLine className="w-3 h-3 text-[#026eff] dark:text-sky-400 shrink-0" />
+                                        <span className="truncate max-w-[260px]">{pageContextSummary}</span>
+                                    </span>
+                                )}
+                                {isTechnician && (
+                                    <span
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                        title="Financial metrics are redacted for Hardware Technicians"
+                                    >
+                                        <RiLockLine className="w-3 h-3 shrink-0" />
+                                        <span>Financials Hidden (Technician)</span>
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
+
+                    {/* Persisted Conversation Threads Drawer */}
+                    {showThreadsDrawer && (
+                        <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/90 max-h-52 overflow-y-auto shrink-0">
+                            <div className={`p-2.5 space-y-1 ${isMaximized ? 'max-w-4xl mx-auto w-full' : ''}`}>
+                                <div className="flex items-center justify-between px-1 pb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                                    <span>Saved Threads ({conversations.length})</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleNewConversation}
+                                        className="text-[#026eff] dark:text-sky-400 hover:underline cursor-pointer"
+                                    >
+                                        + New Thread
+                                    </button>
+                                </div>
+                                {conversations.length === 0 ? (
+                                    <p className="px-2 py-3 text-xs text-zinc-400 text-center">
+                                        No saved conversations yet for this user.
+                                    </p>
+                                ) : (
+                                    conversations.map((conv) => (
+                                        <div
+                                            key={conv.id}
+                                            onClick={() => handleLoadConversation(conv.id)}
+                                            className={`group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-sm border cursor-pointer transition ${
+                                                conversationId === conv.id
+                                                    ? 'border-[#026eff] bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'
+                                                    : 'border-zinc-200/80 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/60 hover:border-zinc-300 dark:hover:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                                            }`}
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-xs font-medium truncate">{conv.title}</div>
+                                                <div className="text-[10px] text-zinc-400">
+                                                    {conv.messages_count} messages · {conv.updated_label || 'recent'}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => handleDeleteConversation(e, conv.id)}
+                                                title="Delete thread"
+                                                className="p-1 text-zinc-400 hover:text-rose-500 opacity-70 group-hover:opacity-100 cursor-pointer"
+                                            >
+                                                <RiDeleteBinLine className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Chat Messages Stream */}
                     <div
                         ref={scrollContainerRef}
                         onScroll={handleScroll}
-                        className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3.5 relative"
+                        className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3.5 relative bg-zinc-50/40 dark:bg-zinc-950/30"
                     >
                         <div className={`space-y-3.5 ${isMaximized ? 'max-w-4xl mx-auto w-full' : ''}`}>
-                            {messages.map((msg) => (
-                                <div key={msg.id} id={msg.id} className="space-y-2">
-                                    {msg.sender === 'user' ? (
-                                        /* User Bubble with Hover Edit & Unsend */
-                                        <div className="group flex flex-col items-end gap-1">
-                                            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-slate-400 dark:text-zinc-500 mr-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleEditMessage(msg.id)}
-                                                    className="hover:text-[#026eff] dark:hover:text-[#38bdf8] flex items-center gap-0.5 p-1 rounded hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                                                    title="Edit question (undos response)"
-                                                >
-                                                    <RiPencilLine className="w-3 h-3" />
-                                                    <span>Edit</span>
-                                                </button>
-                                                <span>•</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleUnsendMessage(msg.id)}
-                                                    className="hover:text-red-500 flex items-center gap-0.5 p-1 rounded hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                                                    title="Unsend question (undos response)"
-                                                >
-                                                    <RiDeleteBinLine className="w-3 h-3" />
-                                                    <span>Unsend</span>
-                                                </button>
-                                            </div>
-                                            <div className="max-w-[85%] rounded-2xl rounded-tr-xs bg-[#026eff] text-white px-3.5 py-2 shadow-sm text-xs sm:text-sm">
-                                                <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                                                <div className="text-[9px] text-blue-200 mt-1 text-right">
-                                                    {msg.timestamp}
+                            {messages.map((msg) => {
+                                const usedRemoteModel =
+                                    msg.source &&
+                                    msg.source !== 'local_db_engine' &&
+                                    msg.source !== 'system' &&
+                                    !String(msg.source).includes('local');
+
+                                return (
+                                    <div key={msg.id} id={msg.id} className="space-y-2">
+                                        {msg.sender === 'user' ? (
+                                            <div className="group flex flex-col items-end gap-1">
+                                                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-zinc-400 dark:text-zinc-500 mr-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditMessage(msg.id)}
+                                                        className="hover:text-[#026eff] dark:hover:text-sky-400 flex items-center gap-0.5 px-1.5 py-0.5 rounded-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                                        title="Edit question"
+                                                    >
+                                                        <RiPencilLine className="w-3 h-3" />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                    <span>&bull;</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUnsendMessage(msg.id)}
+                                                        className="hover:text-rose-500 flex items-center gap-0.5 px-1.5 py-0.5 rounded-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                                        title="Remove question"
+                                                    >
+                                                        <RiDeleteBinLine className="w-3 h-3" />
+                                                        <span>Unsend</span>
+                                                    </button>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        /* Assistant Bubble */
-                                        <div className="flex items-start gap-2.5">
-                                            <SpecMatchMascot
-                                                variant="avatar"
-                                                size={28}
-                                                pose={msg.category === 'maintenance' ? 'active' : msg.category === 'mismatch' ? 'thinking' : msg.id === 'welcome' ? 'greeting' : 'happy'}
-                                                showGlow={false}
-                                                isOnline={false}
-                                                className="mt-0.5"
-                                            />
-
-                                            <div className="flex-1 min-w-0 max-w-[94%] space-y-2.5">
-                                                <div className="rounded-2xl rounded-tl-xs bg-slate-50 dark:bg-zinc-800/70 border border-slate-200/80 dark:border-zinc-700/80 p-3.5 shadow-2xs transition-all">
-                                                    {/* Meta bar: category + engine source + FAQ Minimize Toggle */}
-                                                    <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-200/60 dark:border-zinc-700/60 text-[9px] text-slate-500 dark:text-zinc-400">
-                                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                                            <span className="uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-zinc-700/60 text-slate-700 dark:text-zinc-300">
-                                                                {msg.category.replace('_', ' ')}
-                                                            </span>
-                                                            <span className="flex items-center gap-1 font-medium">
-                                                                {msg.source && msg.source.includes('gemini') ? (
-                                                                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                                                        <RiCheckLine className="w-3 h-3" /> Gemini 3.1 Flash-Lite Active
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1 font-medium">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
-                                                                        Live MySQL DB Grounding
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* FAQ Minimize / Expand dropdown button */}
-                                                        {msg.id !== 'welcome' && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => toggleCollapse(msg.id)}
-                                                                className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-200/70 dark:hover:bg-zinc-700/60 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition cursor-pointer text-[10px] shrink-0"
-                                                                title={collapsedMessages[msg.id] ? 'Expand response' : 'Minimize response'}
-                                                            >
-                                                                <span>{collapsedMessages[msg.id] ? 'Expand' : 'Minimize'}</span>
-                                                                {collapsedMessages[msg.id] ? (
-                                                                    <RiArrowDownSLine className="w-3.5 h-3.5" />
-                                                                ) : (
-                                                                    <RiArrowUpSLine className="w-3.5 h-3.5" />
-                                                                )}
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Collapsible Content */}
-                                                    {!collapsedMessages[msg.id] ? (
-                                                        <>
-                                                            {/* Text Answer with Markdown & Tables */}
-                                                            <MarkdownRenderer content={msg.answer} />
-
-                                                            {/* Auth Session Expired Action Button */}
-                                                            {msg.isAuth && (
-                                                                <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-zinc-700/60 flex items-center gap-2">
-                                                                    <a
-                                                                        href={msg.loginUrl || '/login'}
-                                                                        className="px-3.5 py-1.5 rounded-xl bg-[#026eff] hover:bg-[#0256cc] text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                                                    >
-                                                                        Log In to Resume
-                                                                    </a>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Render Actionable Data Cards */}
-                                                            {msg.data_cards && msg.data_cards.length > 0 && (
-                                                                <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-zinc-700/60 space-y-2">
-                                                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 flex items-center justify-between">
-                                                                        <span>Actionable Fleet Records ({msg.data_cards.length})</span>
-                                                                        <span className="text-[9px] lowercase font-normal">click to assign or view</span>
-                                                                    </div>
-
-                                                                    <div className="grid grid-cols-1 gap-2">
-                                                                        {msg.data_cards.map((card, cIdx) => (
-                                                                            <div
-                                                                                key={cIdx}
-                                                                                className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-700 hover:border-[#026eff]/60 dark:hover:border-[#026eff]/60 transition shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-                                                                            >
-                                                                                <div className="flex items-start gap-2.5 min-w-0">
-                                                                                    {card.type === 'device' ? (
-                                                                                        <HardwareImage
-                                                                                            src={card.image_url}
-                                                                                            alt={card.name}
-                                                                                            className="w-10 h-10 rounded-lg object-cover bg-slate-100 dark:bg-zinc-800 shrink-0 border border-slate-200/50 dark:border-zinc-800"
-                                                                                        />
-                                                                                    ) : card.type === 'mismatch' ? (
-                                                                                        <div className="w-9 h-9 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                                                                                            <RiAlertLine className="w-4 h-4" />
-                                                                                        </div>
-                                                                                    ) : card.type === 'maintenance' ? (
-                                                                                        <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                                                                                            <RiToolsLine className="w-4 h-4" />
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                                                                                            <RiMoneyDollarCircleLine className="w-4 h-4" />
-                                                                                        </div>
-                                                                                    )}
-
-                                                                                    <div className="min-w-0">
-                                                                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                                                                            <span className="font-bold text-xs text-slate-900 dark:text-zinc-100 truncate">
-                                                                                                {card.name}
-                                                                                            </span>
-                                                                                            {card.asset_tag && (
-                                                                                                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200/60 dark:border-zinc-700">
-                                                                                                    {card.asset_tag}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-
-                                                                                        <p className="text-[10px] text-slate-600 dark:text-zinc-400 mt-0.5 line-clamp-1">
-                                                                                            {card.specs}
-                                                                                        </p>
-
-                                                                                        <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-500 dark:text-zinc-400">
-                                                                                            {card.location && <span>{card.location}</span>}
-                                                                                            {card.meta && (
-                                                                                                <span className="font-medium text-[#026eff] dark:text-[#38bdf8]">
-                                                                                                    {card.meta}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                                                                                    {card.type === 'device' && card.status === 'available' ? (
-                                                                                        <Link
-                                                                                            href={`/match?device_id=${card.id}`}
-                                                                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#026eff] hover:bg-[#0256cc] text-white text-[10px] font-semibold transition"
-                                                                                        >
-                                                                                            <span>Assign</span>
-                                                                                            <RiArrowRightLine className="w-2.5 h-2.5" />
-                                                                                        </Link>
-                                                                                    ) : null}
-
-                                                                                    {card.action_url && (
-                                                                                        <Link
-                                                                                            href={card.action_url}
-                                                                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 text-[10px] font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800 transition"
-                                                                                        >
-                                                                                            <span>View</span>
-                                                                                            <RiArrowRightLine className="w-2.5 h-2.5" />
-                                                                                        </Link>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <div
-                                                            onClick={() => toggleCollapse(msg.id)}
-                                                            className="py-1 text-xs text-slate-400 dark:text-zinc-500 italic cursor-pointer hover:text-slate-600 dark:hover:text-zinc-300 select-none"
-                                                        >
-                                                            Response minimized. Click to expand answer and fleet data...
+                                                <div className="max-w-[85%] rounded-sm border border-[#026eff] bg-[#026eff] text-white px-3.5 py-2 text-xs sm:text-[13px]">
+                                                    <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                                                    {msg.timestamp && (
+                                                        <div className="text-[10px] text-blue-100/80 mt-1 text-right tabular-nums">
+                                                            {msg.timestamp}
                                                         </div>
                                                     )}
                                                 </div>
-
-                                                {/* Suggested follow-up prompt chips */}
-                                                {!collapsedMessages[msg.id] && msg.suggested_followups && msg.suggested_followups.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1 pt-0.5">
-                                                        {msg.suggested_followups.map((chip, chipIdx) => (
-                                                            <button
-                                                                key={chipIdx}
-                                                                type="button"
-                                                                onClick={() => handleSend(chip)}
-                                                                className="text-left px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200/80 dark:border-zinc-700 hover:border-[#026eff] dark:hover:border-[#38bdf8] hover:text-[#026eff] dark:hover:text-[#38bdf8] transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                                                            >
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-[#026EFC]" />
-                                                                <span>{chip}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                        ) : (
+                                            <div className="flex items-start gap-2.5">
+                                                <div className="w-6 h-6 rounded-sm border border-[#026eff]/20 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
+                                                    <RiSparklingLine className="w-3.5 h-3.5" />
+                                                </div>
+
+                                                <div className="flex-1 min-w-0 max-w-[94%] space-y-2">
+                                                    <div className="rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3.5 transition-all">
+                                                        {/* Meta bar */}
+                                                        <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-zinc-100 dark:border-zinc-800 text-[10px] text-zinc-400 dark:text-zinc-500">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="capitalize font-medium px-1.5 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                                                                    {(msg.category || 'general').replace('_', ' ')}
+                                                                </span>
+                                                                <span className="flex items-center gap-1">
+                                                                    {usedRemoteModel ? (
+                                                                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                                                            <RiCheckLine className="w-3 h-3" />{' '}
+                                                                            {msg.model_label || aiStatus.model_label || msg.source}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                                                            <span className="w-1.5 h-1.5 rounded-sm bg-amber-500 inline-block" />
+                                                                            Live DB Grounding
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </div>
+
+                                                            {!String(msg.id).startsWith('welcome') && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => toggleCollapse(msg.id)}
+                                                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition cursor-pointer shrink-0"
+                                                                    title={collapsedMessages[msg.id] ? 'Expand response' : 'Minimize response'}
+                                                                >
+                                                                    <span>{collapsedMessages[msg.id] ? 'Expand' : 'Minimize'}</span>
+                                                                    {collapsedMessages[msg.id] ? (
+                                                                        <RiArrowDownSLine className="w-3.5 h-3.5" />
+                                                                    ) : (
+                                                                        <RiArrowUpSLine className="w-3.5 h-3.5" />
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Tool-Use Trace Pills */}
+                                                        {!collapsedMessages[msg.id] &&
+                                                            Array.isArray(msg.tool_trace) &&
+                                                            msg.tool_trace.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                                                                    {msg.tool_trace.map((trace, tIdx) => (
+                                                                        <span
+                                                                            key={tIdx}
+                                                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/70 text-[10px] font-mono text-zinc-600 dark:text-zinc-300"
+                                                                        >
+                                                                            <RiDatabase2Line className="w-3 h-3 text-[#026eff] dark:text-sky-400 shrink-0" />
+                                                                            <span>{trace.label || trace.tool}</span>
+                                                                            {trace.summary && (
+                                                                                <span className="text-zinc-400 dark:text-zinc-500">
+                                                                                    · {trace.summary}
+                                                                                </span>
+                                                                            )}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                        {!collapsedMessages[msg.id] ? (
+                                                            <>
+                                                                <MarkdownRenderer content={msg.answer} />
+
+                                                                {msg.isAuth && (
+                                                                    <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+                                                                        <a
+                                                                            href={msg.loginUrl || '/login'}
+                                                                            className="px-3 py-1.5 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-white text-xs font-medium transition flex items-center gap-1.5 cursor-pointer"
+                                                                        >
+                                                                            Log In to Resume
+                                                                        </a>
+                                                                    </div>
+                                                                )}
+
+                                                                {msg.data_cards && msg.data_cards.length > 0 && (
+                                                                    <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                                                                        <div className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 flex items-center justify-between">
+                                                                            <span>Fleet Records ({msg.data_cards.length})</span>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-1 gap-1.5">
+                                                                            {msg.data_cards.map((card, cIdx) => (
+                                                                                <div
+                                                                                    key={cIdx}
+                                                                                    className="p-2.5 rounded-sm bg-zinc-50/70 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                                                                                >
+                                                                                    <div className="flex items-start gap-2.5 min-w-0">
+                                                                                        {card.type === 'device' ? (
+                                                                                            <HardwareImage
+                                                                                                src={card.image_url}
+                                                                                                alt={card.name}
+                                                                                                className="w-9 h-9 rounded-sm object-cover bg-zinc-100 dark:bg-zinc-800 shrink-0 border border-zinc-200 dark:border-zinc-800"
+                                                                                            />
+                                                                                        ) : card.type === 'license' ? (
+                                                                                            <div className="w-8 h-8 rounded-sm border border-[#026eff]/20 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 flex items-center justify-center shrink-0">
+                                                                                                <RiKey2Line className="w-4 h-4" />
+                                                                                            </div>
+                                                                                        ) : card.type === 'employee' ? (
+                                                                                            <div className="w-8 h-8 rounded-sm border border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                                                                                <RiUserLine className="w-4 h-4" />
+                                                                                            </div>
+                                                                                        ) : card.type === 'mismatch' ? (
+                                                                                            <div className="w-8 h-8 rounded-sm border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                                                                                                <RiAlertLine className="w-4 h-4" />
+                                                                                            </div>
+                                                                                        ) : card.type === 'maintenance' ? (
+                                                                                            <div className="w-8 h-8 rounded-sm border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                                                                                <RiToolsLine className="w-4 h-4" />
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <div className="w-8 h-8 rounded-sm border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                                                                                <RiMoneyDollarCircleLine className="w-4 h-4" />
+                                                                                            </div>
+                                                                                        )}
+
+                                                                                        <div className="min-w-0">
+                                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                                <span className="font-medium text-xs text-zinc-900 dark:text-zinc-100 truncate">
+                                                                                                    {card.name}
+                                                                                                </span>
+                                                                                                {card.asset_tag && (
+                                                                                                    <span className="px-1.5 py-0.2 rounded-sm border border-zinc-200 dark:border-zinc-700 text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                                                                                                        {card.asset_tag}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+
+                                                                                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-1">
+                                                                                                {card.specs}
+                                                                                            </p>
+
+                                                                                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
+                                                                                                {card.location && <span>{card.location}</span>}
+                                                                                                {card.meta && (
+                                                                                                    <span className="font-medium text-[#026eff] dark:text-sky-400">
+                                                                                                        {card.meta}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                                                                        {isAdminOrManager && card.type === 'device' && card.status === 'available' && card.id ? (
+                                                                                            <Link
+                                                                                                href={`/match?device_id=${card.id}`}
+                                                                                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-white text-[11px] font-medium transition"
+                                                                                            >
+                                                                                                <span>Assign</span>
+                                                                                                <RiArrowRightLine className="w-3 h-3" />
+                                                                                            </Link>
+                                                                                        ) : null}
+
+                                                                                        {card.action_url && (
+                                                                                            <Link
+                                                                                                href={card.action_url}
+                                                                                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                                                                                            >
+                                                                                                <span>View</span>
+                                                                                                <RiArrowRightLine className="w-3 h-3" />
+                                                                                            </Link>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <div
+                                                                onClick={() => toggleCollapse(msg.id)}
+                                                                className="py-1 text-xs text-zinc-400 dark:text-zinc-500 italic cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 select-none"
+                                                            >
+                                                                Response minimized. Click to expand...
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {!collapsedMessages[msg.id] && msg.suggested_followups && msg.suggested_followups.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                                            {msg.suggested_followups.map((chip, chipIdx) => (
+                                                                <button
+                                                                    key={chipIdx}
+                                                                    type="button"
+                                                                    onClick={() => handleSend(chip)}
+                                                                    className="text-left px-2.5 py-1 rounded-sm text-[11px] font-medium bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:border-[#026eff] dark:hover:border-sky-400 hover:text-[#026eff] dark:hover:text-sky-400 transition cursor-pointer"
+                                                                >
+                                                                    {chip}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
 
                             {/* Loading State */}
                             {isLoading && (
                                 <div className="flex items-start gap-2.5">
-                                    <SpecMatchMascot
-                                        variant="avatar"
-                                        size={28}
-                                        pose="thinking"
-                                        showGlow={true}
-                                        isOnline={true}
-                                        className="mt-0.5 animate-pulse"
-                                    />
-                                    <div className="rounded-2xl rounded-tl-xs bg-slate-50 dark:bg-zinc-800/70 border border-slate-200/80 dark:border-zinc-700/80 p-3 shadow-2xs">
-                                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400">
-                                            <span className="w-2 h-2 rounded-full bg-[#026EFC] animate-ping" />
-                                            <span>Reading fleet database & reasoning...</span>
+                                    <div className="w-6 h-6 rounded-sm border border-[#026eff]/20 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 flex items-center justify-center shrink-0 mt-0.5 animate-pulse">
+                                        <RiSparklingLine className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div className="rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3.5 py-2.5">
+                                        <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                                            <span className="w-1.5 h-1.5 rounded-sm bg-[#026eff] animate-ping" />
+                                            <span>Running read-only database analytics...</span>
                                         </div>
                                     </div>
                                 </div>
@@ -953,17 +1122,17 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
                             <button
                                 type="button"
                                 onClick={scrollToBottom}
-                                className="absolute bottom-3 right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer backdrop-blur-xs border border-white/20 dark:border-zinc-800"
-                                title="Skip all the way to bottom"
+                                className="absolute bottom-3 right-5 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-zinc-800 dark:border-zinc-200 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] font-medium transition-colors cursor-pointer"
+                                title="Skip to bottom"
                             >
-                                <span>Skip to bottom</span>
+                                <span>Scroll to bottom</span>
                                 <RiArrowDownLine className="w-3.5 h-3.5" />
                             </button>
                         </div>
                     )}
 
-                    {/* Footer / Input Area */}
-                    <div className="p-3 border-t border-slate-200/80 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/90 backdrop-blur-md shrink-0">
+                    {/* Input Area */}
+                    <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
                         <div className={`${isMaximized ? 'max-w-4xl mx-auto w-full' : ''}`}>
                             <form
                                 onSubmit={(e) => {
@@ -977,17 +1146,17 @@ export default function GeminiFleetAssistant({ isOpen = false, onClose, onOpen }
                                     type="text"
                                     value={inputPrompt}
                                     onChange={(e) => setInputPrompt(e.target.value)}
-                                    placeholder="Ask questions (e.g. 'Which employees are using low end specs?')..."
+                                    placeholder="Ask about assets, licenses, custody, warranties, or mismatches..."
                                     disabled={isLoading}
-                                    className="w-full rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:border-[#026eff] focus:outline-none focus:ring-1 focus:ring-[#026eff] pr-10 shadow-2xs"
+                                    className="w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/60 px-3.5 py-2 text-xs sm:text-[13px] text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:bg-white dark:focus:bg-zinc-900 focus:border-[#026eff] focus:outline-none pr-10 transition"
                                 />
                                 <button
                                     type="submit"
                                     disabled={!inputPrompt.trim() || isLoading}
-                                    className={`absolute right-1.5 p-1.5 rounded-lg font-semibold transition cursor-pointer ${
+                                    className={`absolute right-1.5 p-1.5 rounded-sm transition cursor-pointer ${
                                         inputPrompt.trim() && !isLoading
-                                            ? 'bg-[#026eff] text-white hover:bg-[#0256cc] shadow-sm'
-                                            : 'bg-slate-100 dark:bg-zinc-700 text-slate-400 dark:text-zinc-500 cursor-not-allowed'
+                                            ? 'bg-[#026eff] text-white hover:bg-[#0258d1]'
+                                            : 'text-zinc-300 dark:text-zinc-600 cursor-not-allowed'
                                     }`}
                                 >
                                     <RiSendPlaneFill className="w-3.5 h-3.5" />

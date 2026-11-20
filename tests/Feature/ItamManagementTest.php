@@ -168,7 +168,7 @@ class ItamManagementTest extends TestCase
 
     public function test_itam_tracking_service_financials_and_depreciation(): void
     {
-        Device::create([
+        $depreciatingDevice = Device::create([
             'asset_tag' => 'LAP-DEP-01',
             'device_type' => 'laptop',
             'brand' => 'Dell',
@@ -179,7 +179,7 @@ class ItamManagementTest extends TestCase
             'storage_type' => 'SSD',
             'storage_gb' => 1024,
             'gpu_tier' => 'dedicated-entry',
-            'year_acquired' => 2022,
+            'year_acquired' => now()->subYears(2)->year,
             'purchase_cost' => 2000.00,
             'purchase_date' => now()->subYears(2)->toDateString(),
             'depreciation_rate_percent' => 20.0,
@@ -189,14 +189,42 @@ class ItamManagementTest extends TestCase
             'lifecycle_stage' => 'deployment',
         ]);
 
+        $activeWarrantyOldDevice = Device::create([
+            'asset_tag' => 'DSK-OLD-01',
+            'device_type' => 'desktop',
+            'brand' => 'HP',
+            'model' => 'EliteDesk',
+            'cpu' => 'Intel Core i5',
+            'cpu_tier' => 'mid',
+            'ram_gb' => 16,
+            'storage_type' => 'SSD',
+            'storage_gb' => 512,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => now()->subYears(10)->year,
+            'purchase_cost' => 1000.00,
+            'purchase_date' => now()->subYears(10)->toDateString(),
+            'depreciation_rate_percent' => 25.0,
+            'warranty_expiry' => now()->addYear()->toDateString(),
+            'condition' => 'fair',
+            'status' => 'assigned',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
         $service = new ItamTrackingService;
         $financials = $service->getFinancialSummary();
         $warranties = $service->getWarrantyAlerts();
         $redundancy = $service->detectRedundantAssets();
 
-        $this->assertGreaterThan(0, $financials['total_acquisition_cost']);
-        $this->assertGreaterThan(0, $financials['current_book_value']);
+        $this->assertEquals(3000.00, $financials['total_acquisition_cost']);
+        $this->assertEqualsWithDelta(1200.00, $depreciatingDevice->current_book_value, 15.0);
+        $this->assertEquals(100.00, $activeWarrantyOldDevice->current_book_value);
+        $this->assertLessThan($financials['total_acquisition_cost'], $financials['current_book_value']);
+        $this->assertGreaterThan(0, $financials['total_depreciation']);
+
+        $this->assertEquals('expiring_soon', $depreciatingDevice->warranty_status);
+        $this->assertEquals('active', $activeWarrantyOldDevice->warranty_status);
         $this->assertEquals(1, $warranties['expiring_soon_count']);
+        $this->assertEquals(0, $warranties['expired_count']);
         $this->assertEquals(1, $redundancy['idle_high_spec_count']);
     }
 
@@ -204,5 +232,92 @@ class ItamManagementTest extends TestCase
     {
         $response = $this->actingAs($this->user)->get('/maintenance');
         $response->assertOk();
+    }
+
+    public function test_inventory_index_provides_category_counts_and_warranty_filter_and_show_redacts_financials_for_technician(): void
+    {
+        $laptop = Device::create([
+            'asset_tag' => 'LAP-WRN-01',
+            'device_type' => 'laptop',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad T14',
+            'cpu' => 'AMD Ryzen 7',
+            'cpu_tier' => 'high',
+            'ram_gb' => 32,
+            'storage_type' => 'SSD',
+            'storage_gb' => 512,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => now()->year,
+            'purchase_cost' => 75000.00,
+            'warranty_expiry' => now()->addDays(20)->toDateString(),
+            'condition' => 'good',
+            'status' => 'available',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        MaintenanceLog::create([
+            'device_id' => $laptop->id,
+            'type' => 'repair',
+            'title' => 'Fan Replacement',
+            'description' => 'Replaced noisy cooling fan.',
+            'cost' => 4500.00,
+            'started_at' => now()->toDateString(),
+            'status' => 'completed',
+        ]);
+
+        Device::create([
+            'asset_tag' => 'MON-WRN-01',
+            'device_type' => 'monitor',
+            'brand' => 'Dell',
+            'model' => 'UltraSharp U2723QE',
+            'year_acquired' => now()->year,
+            'purchase_cost' => 28000.00,
+            'warranty_expiry' => now()->addYear()->toDateString(),
+            'condition' => 'excellent',
+            'status' => 'available',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        $indexRes = $this->actingAs($this->user)->get(route('devices.index'));
+        $indexRes->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Devices/Index')
+                ->where('category_counts.all', 2)
+                ->where('category_counts.laptop', 1)
+                ->where('category_counts.monitor', 1)
+            );
+
+        $filteredRes = $this->actingAs($this->user)->get(route('devices.index', ['warranty' => 'expiring_soon']));
+        $filteredRes->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('devices.data', 1)
+                ->where('devices.data.0.asset_tag', 'LAP-WRN-01')
+            );
+
+        $auditor = User::factory()->viewer()->create();
+        $technician = User::factory()->technician()->create();
+
+        foreach ([$this->user, $auditor] as $authorizedUser) {
+            $this->actingAs($authorizedUser)
+                ->get(route('devices.show', $laptop->id))
+                ->assertOk()
+                ->assertInertia(fn ($page) => $page
+                    ->where('can_view_financials', true)
+                    ->where('device.purchase_cost', 75000)
+                    ->whereNot('device.current_book_value', null)
+                    ->where('device.maintenance_logs.0.cost', 4500)
+                );
+        }
+
+        $this->actingAs($technician)
+            ->get(route('devices.show', $laptop->id))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('can_view_financials', false)
+                ->where('device.purchase_cost', null)
+                ->where('device.current_book_value', null)
+                ->where('device.depreciation_rate_percent', null)
+                ->where('device.maintenance_logs.0.cost', null)
+            );
     }
 }

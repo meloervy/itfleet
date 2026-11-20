@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source("..");
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -8,6 +8,17 @@
     --color-spec-blue: #026eff;
     --color-spec-cyan: #0b79ff;
     --color-spec-mint: #0aceb3;
+}
+
+@layer base {
+    html {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+        @apply bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 selection:bg-[#026eff]/15 selection:text-[#026eff] dark:selection:bg-[#026eff]/30 dark:selection:text-sky-300;
+    }
 }
 
 /* Custom subtle scrollbar for dropdown menus & containers */
@@ -21,12 +32,12 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
-    border-radius: 9999px;
+    background: rgba(161, 161, 170, 0.35);
+    border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(100, 116, 139, 0.6);
+    background: rgba(113, 113, 122, 0.55);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -40,7 +51,7 @@
 /* Firefox support */
 .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+    scrollbar-color: rgba(161, 161, 170, 0.35) transparent;
 }
 
 .dark .custom-scrollbar {

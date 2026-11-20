@@ -1,56 +1,71 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import CustomSelect from '@/Components/CustomSelect';
-import HardwareImage from '@/Components/HardwareImage';
+import InputError from '@/Components/InputError';
+import InputLabel from '@/Components/InputLabel';
+import Modal from '@/Components/Modal';
+import Pagination from '@/Components/Pagination';
+import PrimaryButton from '@/Components/PrimaryButton';
 import ResizableTh from '@/Components/ResizableTh';
+import SecondaryButton from '@/Components/SecondaryButton';
+import DangerButton from '@/Components/DangerButton';
+import TextInput from '@/Components/TextInput';
 import { useResizableColumns } from '@/Hooks/useResizableColumns';
-import useOutsideClick from '@/hooks/useOutsideClick';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import {
-    RiMoreFill,
-    RiExchangeLine,
-    RiCloseCircleLine,
+    RiAddLine,
+    RiCloseLine,
+    RiComputerLine,
+    RiDeleteBinLine,
+    RiDownload2Line,
     RiEditLine,
-    RiArrowRightLine,
-    RiSearchLine,
-    RiUserAddLine,
-    RiTeamLine,
-    RiMacbookLine,
-    RiAlertLine,
-    RiUserStarLine,
+    RiExternalLinkLine,
     RiFilePdfLine,
     RiFilter3Line,
+    RiKey2Line,
+    RiLinkUnlink,
+    RiMore2Fill,
     RiRefreshLine,
-    RiCheckboxCircleLine,
-    RiArrowDownSLine,
-    RiCpuLine,
-    RiBuildingLine,
-    RiCloseLine,
-    RiArrowUpDownLine,
+    RiSearchLine,
+    RiSparkling2Line,
+    RiUpload2Line,
+    RiUser3Line,
 } from 'react-icons/ri';
+
+const DEFAULT_AVATAR = '/user/default-profile-picture.png';
+
+const resolveAvatarUrl = (emp) => {
+    if (!emp) return DEFAULT_AVATAR;
+    if (emp.profile_picture_url) return emp.profile_picture_url;
+    if (emp.profile_picture?.startsWith('public/')) {
+        return '/' + emp.profile_picture.slice(7);
+    }
+    return emp.profile_picture || DEFAULT_AVATAR;
+};
 
 export default function EmployeesIndex({ employees, role_profiles = [], departments = [], stats = {}, filters = {} }) {
     const { auth } = usePage().props;
     const user = auth?.user;
     const isAdminOrManager = ['admin', 'manager'].includes(user?.role);
 
-    const [showModal, setShowModal] = useState(false);
-    const [editingEmp, setEditingEmp] = useState(null);
+    const [search, setSearch] = useState(filters.search || '');
+    const [department, setDepartment] = useState(filters.department || '');
+    const [roleProfileId, setRoleProfileId] = useState(filters.role_profile_id ? String(filters.role_profile_id) : '');
+    const [hardwareStatus, setHardwareStatus] = useState(filters.hardware_status || '');
     const [wrapText, setWrapText] = useState(false);
-    const [search, setSearch] = useState(filters?.search || '');
-    const [department, setDepartment] = useState(filters?.department || '');
-    const [roleProfileId, setRoleProfileId] = useState(filters?.role_profile_id || '');
-    const [hardwareStatus, setHardwareStatus] = useState(filters?.hardware_status || '');
     const [openMenuId, setOpenMenuId] = useState(null);
-    const [filePreview, setFilePreview] = useState(null);
-    const fileInputRef = useRef(null);
-    const tableContainerRef = useRef(null);
 
-    useOutsideClick(tableContainerRef, () => {
-        if (openMenuId !== null) {
-            setOpenMenuId(null);
-        }
-    });
+    const [showModal, setShowModal] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [editingEmp, setEditingEmp] = useState(null);
+    const [filePreview, setFilePreview] = useState(null);
+    const [unassignTarget, setUnassignTarget] = useState(null);
+    const [custodyTargetId, setCustodyTargetId] = useState(null);
+    const custodyTarget = employees.data.find((e) => e.id === custodyTargetId) || null;
+
+    const fileInputRef = useRef(null);
+    const csvInputRef = useRef(null);
+    const isFirstRender = useRef(true);
 
     const initialWidths = {
         employee: 260,
@@ -62,9 +77,12 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
         actions: 120,
     };
 
-    const { widths, startResize, autoExpandCol, resetWidths, isResizing, resizingCol } = useResizableColumns(initialWidths, 'employees_table_v6');
+    const { widths, startResize, autoExpandCol, resetWidths, resizingCol } = useResizableColumns(
+        initialWidths,
+        'employees_table_v6'
+    );
 
-    const { data, setData, post, processing, reset, errors } = useForm({
+    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         name: '',
         department: '',
         role_profile_id: '',
@@ -73,30 +91,41 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
         notes: '',
     });
 
-    const { post: postUnassign } = useForm();
+    const { post: postUnassign, processing: unassigning } = useForm({});
 
-    const handleSort = (sortKey, explicitDirection = null) => {
-        const currentSort = filters?.sort || 'name';
-        const currentDirection = filters?.direction || 'asc';
-        const nextDirection = explicitDirection !== null
-            ? explicitDirection
-            : (currentSort === sortKey && currentDirection === 'asc' ? 'desc' : 'asc');
+    const {
+        data: importData,
+        setData: setImportData,
+        post: postImport,
+        processing: importingCsv,
+        errors: importErrors,
+        reset: resetImport,
+        clearErrors: clearImportErrors,
+    } = useForm({
+        file: null,
+    });
 
-        router.get(
-            route('employees.index'),
-            {
-                search,
-                department,
-                role_profile_id: roleProfileId,
-                hardware_status: hardwareStatus,
-                sort: sortKey,
-                direction: nextDirection,
-            },
-            { preserveState: true, replace: true }
-        );
+    const openImportModal = () => {
+        resetImport();
+        clearImportErrors();
+        if (csvInputRef.current) csvInputRef.current.value = '';
+        setShowImportModal(true);
     };
 
-    const isFirstRender = useRef(true);
+    const closeImportModal = () => {
+        setShowImportModal(false);
+        resetImport();
+        clearImportErrors();
+    };
+
+    const handleImportSubmit = (e) => {
+        e.preventDefault();
+        postImport(route('employees.import.csv'), {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => closeImportModal(),
+        });
+    };
 
     useEffect(() => {
         if (isFirstRender.current) {
@@ -122,6 +151,36 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
         return () => clearTimeout(timer);
     }, [search, department, roleProfileId, hardwareStatus]);
 
+    useEffect(() => {
+        if (!openMenuId) return;
+        const handleClickOutside = (e) => {
+            if (!e.target.closest('[data-emp-menu]')) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [openMenuId]);
+
+    const handleSort = (sortKey) => {
+        const currentSort = filters.sort || 'name';
+        const currentDirection = filters.direction || 'asc';
+        const nextDirection = currentSort === sortKey && currentDirection === 'asc' ? 'desc' : 'asc';
+
+        router.get(
+            route('employees.index'),
+            {
+                search,
+                department,
+                role_profile_id: roleProfileId,
+                hardware_status: hardwareStatus,
+                sort: sortKey,
+                direction: nextDirection,
+            },
+            { preserveState: true, replace: true }
+        );
+    };
+
     const handleFilter = (e) => {
         e?.preventDefault();
         router.get(
@@ -146,106 +205,147 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
         router.get(route('employees.index'));
     };
 
-    const activeFilterCount = [search, department, roleProfileId, hardwareStatus].filter(Boolean).length;
-    const employeeList = Array.isArray(employees) ? employees : employees?.data || [];
-
-    const openCreate = () => {
+    const openCreateModal = () => {
         setEditingEmp(null);
-        setFilePreview(null);
         reset();
+        clearErrors();
+        setFilePreview(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setShowModal(true);
     };
 
-    const openEdit = (emp) => {
+    const openEditModal = (emp) => {
+        setOpenMenuId(null);
         setEditingEmp(emp);
-        setFilePreview(null);
+        clearErrors();
         setData({
-            name: emp.name,
-            department: emp.department,
-            role_profile_id: emp.role_profile_id || '',
+            name: emp.name || '',
+            department: emp.department || '',
+            role_profile_id: emp.role_profile_id ? String(emp.role_profile_id) : '',
             profile_picture: emp.profile_picture || '',
             profile_picture_file: null,
             notes: emp.notes || '',
         });
+        setFilePreview(resolveAvatarUrl(emp));
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setEditingEmp(null);
+        setFilePreview(null);
+        reset();
+        clearErrors();
     };
 
     const handleFileChange = (e) => {
         const file = e.target.files?.[0];
-        if (file) {
-            setData('profile_picture_file', file);
-            const previewUrl = URL.createObjectURL(file);
-            setFilePreview(previewUrl);
-        }
+        if (!file) return;
+        setData('profile_picture_file', file);
+        const reader = new FileReader();
+        reader.onloadend = () => setFilePreview(reader.result);
+        reader.readAsDataURL(file);
     };
 
-    const handleClearPhoto = () => {
+    const handleClearAvatar = () => {
         setData((prev) => ({
             ...prev,
             profile_picture: 'public/user/default-profile-picture.png',
             profile_picture_file: null,
         }));
-        setFilePreview(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+        setFilePreview(DEFAULT_AVATAR);
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (editingEmp) {
             post(route('employees.update', editingEmp.id), {
-                onSuccess: () => {
-                    setShowModal(false);
-                    setFilePreview(null);
-                },
+                preserveScroll: true,
                 forceFormData: true,
+                onSuccess: () => closeModal(),
             });
         } else {
             post(route('employees.store'), {
-                onSuccess: () => {
-                    setShowModal(false);
-                    setFilePreview(null);
-                },
+                preserveScroll: true,
                 forceFormData: true,
+                onSuccess: () => closeModal(),
             });
         }
     };
 
-    const handleUnassign = (emp) => {
-        if (confirm(`Unassign hardware from ${emp.name}? Device will return to Available status.`)) {
-            postUnassign(route('employees.unassign', emp.id));
-        }
+    const confirmUnassign = () => {
+        if (!unassignTarget) return;
+        postUnassign(route('employees.unassign', unassignTarget.id), {
+            preserveScroll: true,
+            onSuccess: () => setUnassignTarget(null),
+        });
     };
+
+    const activeFilterCount = [search, department, roleProfileId, hardwareStatus].filter(Boolean).length;
+
+    const totalWorkforce = stats?.total ?? employees.total ?? 0;
+    const assignedCount = stats?.assigned ?? 0;
+    const assignedPct = stats?.assigned_percentage ?? 0;
+    const unassignedCount = stats?.unassigned ?? 0;
+    const profiledCount = stats?.with_profile ?? 0;
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-sans font-extrabold tracking-tight text-slate-900 dark:text-zinc-100">Company Staff Directory</h1>
-                        <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1 max-w-2xl">
-                            Workforce profiles, role spec thresholds, and currently issued hardware allocations.
+                        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                            Employee Directory
+                        </h1>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                            Workforce roster, target role profiles, and assigned hardware custodianship.
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
                         {isAdminOrManager && (
-                            <a
-                                href={route('employees.export.pdf')}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/60 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 transition"
-                            >
-                                <RiFilePdfLine className="w-4 h-4 text-rose-500" />
-                                <span>Export Audit PDF</span>
-                            </a>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={openImportModal}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                >
+                                    <RiUpload2Line className="w-3.5 h-3.5 text-[#026eff]" />
+                                    <span>Import CSV</span>
+                                </button>
+                                <a
+                                    href={route('employees.export.csv')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                                >
+                                    <RiDownload2Line className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Export CSV</span>
+                                </a>
+                                <a
+                                    href={route('employees.export.pdf')}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                                >
+                                    <RiFilePdfLine className="w-3.5 h-3.5 text-rose-500" />
+                                    <span>Export PDF</span>
+                                </a>
+                            </>
                         )}
+                        <Link
+                            href={route('match.index')}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                        >
+                            <RiSparkling2Line className="w-3.5 h-3.5 text-[#026eff]" />
+                            <span>Smart Match</span>
+                        </Link>
                         {isAdminOrManager && (
                             <button
-                                onClick={openCreate}
-                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#026eff] text-xs font-semibold text-white hover:bg-[#0256cc] shadow-2xs transition cursor-pointer"
+                                type="button"
+                                onClick={openCreateModal}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-xs font-medium text-white transition cursor-pointer"
                             >
-                                <RiUserAddLine className="w-4 h-4" />
+                                <RiAddLine className="w-3.5 h-3.5" />
                                 <span>Add Employee</span>
                             </button>
                         )}
@@ -253,164 +353,151 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
                 </div>
             }
         >
-            <Head title="Employees Directory - SpecMatch" />
+            <Head title="Employees - ITFleet" />
 
-            {/* 1. KPI Summary Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-5">
-                {/* 1. Total Staff */}
-                <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Total Workforce</span>
-                        <div className="w-8 h-8 rounded-xl bg-[#026eff]/10 dark:bg-[#026eff]/20 flex items-center justify-center text-[#026eff] dark:text-[#38bdf8]">
-                            <RiTeamLine className="w-4 h-4" />
-                        </div>
+            {/* Minimal KPI Summary */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 p-4">
+                    <div className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                        Total Workforce
                     </div>
-                    <div className="mt-2 flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-zinc-50">{stats?.total || 0}</span>
-                        <span className="text-xs text-slate-500 dark:text-zinc-400">registered staff</span>
+                    <div className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+                        {totalWorkforce}
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400">
-                        <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
-                        <span>Active corporate directory</span>
+                    <div className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                        {departments.length} departments active
                     </div>
                 </div>
 
-                {/* 2. Equipped with Hardware */}
-                <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Hardware Equipped</span>
-                        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                            <RiMacbookLine className="w-4 h-4" />
-                        </div>
-                    </div>
-                    <div className="mt-2 flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-zinc-50">{stats?.assigned || 0}</span>
-                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
-                            {stats?.assigned_percentage || 0}%
+                <button
+                    type="button"
+                    onClick={() => setHardwareStatus((prev) => (prev === 'assigned' ? '' : 'assigned'))}
+                    className={`text-left rounded-sm border p-4 transition cursor-pointer ${
+                        hardwareStatus === 'assigned'
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-700'
+                            : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                    }`}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                            Assigned Hardware
+                        </span>
+                        <span className="px-2 py-0.5 rounded-sm border border-emerald-500/20 text-[11px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 tabular-nums">
+                            {assignedPct}%
                         </span>
                     </div>
-                    <div className="mt-2 w-full bg-slate-100 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-                        <div
-                            className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, Math.max(0, stats?.assigned_percentage || 0))}%` }}
-                        ></div>
+                    <div className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+                        {assignedCount}
                     </div>
-                </div>
+                    <div className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        {hardwareStatus === 'assigned' ? 'Filtered to assigned' : 'Click to filter assigned'}
+                    </div>
+                </button>
 
-                {/* 3. Hardware Needed */}
-                <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Needs Hardware</span>
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                            stats?.unassigned > 0
-                                ? 'bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400'
-                                : 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400'
-                        }`}>
-                            <RiAlertLine className="w-4 h-4" />
-                        </div>
-                    </div>
-                    <div className="mt-2 flex items-baseline gap-2">
-                        <span className={`text-2xl font-black ${
-                            stats?.unassigned > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-zinc-50'
-                        }`}>
-                            {stats?.unassigned || 0}
+                <button
+                    type="button"
+                    onClick={() => setHardwareStatus((prev) => (prev === 'unassigned' ? '' : 'unassigned'))}
+                    className={`text-left rounded-sm border p-4 transition cursor-pointer ${
+                        hardwareStatus === 'unassigned'
+                            ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700'
+                            : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                    }`}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                            Awaiting Hardware
                         </span>
-                        <span className="text-xs text-slate-500 dark:text-zinc-400">unallocated staff</span>
-                    </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-[11px]">
-                        {stats?.unassigned > 0 ? (
-                            <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
-                                <span>Ready for AI Match &amp; Issue</span>
-                            </span>
-                        ) : (
-                            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                                <RiCheckboxCircleLine className="w-3.5 h-3.5" /> 100% staff equipped
-                            </span>
+                        {unassignedCount > 0 && (
+                            <span className="w-1.5 h-1.5 rounded-sm bg-amber-500" />
                         )}
                     </div>
-                </div>
+                    <div className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+                        {unassignedCount}
+                    </div>
+                    <div className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        {hardwareStatus === 'unassigned' ? 'Filtered to unassigned' : 'Click to filter unassigned'}
+                    </div>
+                </button>
 
-                {/* 4. Role Profiles Configured */}
-                <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Role Profiles</span>
-                        <div className="w-8 h-8 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                            <RiUserStarLine className="w-4 h-4" />
-                        </div>
+                <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 p-4">
+                    <div className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                        Role Profiled
                     </div>
-                    <div className="mt-2 flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-zinc-50">{stats?.with_profile || 0}</span>
-                        <span className="text-xs text-slate-500 dark:text-zinc-400">mapped workloads</span>
+                    <div className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+                        {profiledCount}
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
-                        <span>Objective fit scoring active</span>
+                    <div className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                        Across {role_profiles.length} workload profiles
                     </div>
                 </div>
             </div>
 
-            {/* 2. Advanced Filter & Search Bar */}
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 p-4 shadow-2xs mb-5">
+            {/* Filter & Toolbar */}
+            <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 p-4 mb-5">
                 <form onSubmit={handleFilter}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-center">
-                        {/* Search Bar */}
-                        <div className="lg:col-span-3 relative">
-                            <RiSearchLine className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-2 lg:col-span-4 relative">
+                            <RiSearchLine className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                                 type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search staff, department, role, or hardware..."
-                                className="w-full text-xs font-medium pl-9 pr-3.5 py-2 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 shadow-2xs transition"
+                                placeholder="Search name, department, role, asset..."
+                                className="w-full pl-9 pr-8 py-2 text-xs rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-[#026eff] focus:ring-0"
                             />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch('')}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer"
+                                    aria-label="Clear search"
+                                >
+                                    <RiCloseLine className="w-4 h-4" />
+                                </button>
+                            )}
                         </div>
 
-                        {/* Hardware Status Filter */}
-                        <div className="lg:col-span-3">
+                        <div className="lg:col-span-2">
                             <CustomSelect
-                                value={hardwareStatus}
-                                onChange={(val) => setHardwareStatus(val)}
-                                placeholder="All Allocation Statuses"
+                                value={department}
+                                onChange={setDepartment}
+                                placeholder="Department"
                                 options={[
-                                    { value: 'assigned', label: 'Equipped (Assigned)' },
-                                    { value: 'unassigned', label: 'Needs Device (Unassigned)' },
+                                    { value: '', label: 'All departments' },
+                                    ...departments.map((dept) => ({ value: dept, label: dept })),
                                 ]}
                             />
                         </div>
 
-                        {/* Department Filter */}
-                        <div className="lg:col-span-2">
-                            <CustomSelect
-                                value={department}
-                                onChange={(val) => setDepartment(val)}
-                                placeholder="All Departments"
-                                icon={RiBuildingLine}
-                                options={departments.map((dept) => ({
-                                    value: dept,
-                                    label: dept,
-                                }))}
-                            />
-                        </div>
-
-                        {/* Role Profile Filter */}
                         <div className="lg:col-span-2">
                             <CustomSelect
                                 value={roleProfileId}
-                                onChange={(val) => setRoleProfileId(val)}
-                                placeholder="All Role Profiles"
-                                options={role_profiles.map((p) => ({
-                                    value: p.id,
-                                    label: p.name,
-                                }))}
+                                onChange={setRoleProfileId}
+                                placeholder="Role profile"
+                                options={[
+                                    { value: '', label: 'All profiles' },
+                                    ...role_profiles.map((rp) => ({ value: String(rp.id), label: rp.name })),
+                                ]}
                             />
                         </div>
 
-                        {/* Filter & Reset Buttons */}
+                        <div className="lg:col-span-2">
+                            <CustomSelect
+                                value={hardwareStatus}
+                                onChange={setHardwareStatus}
+                                placeholder="Hardware"
+                                options={[
+                                    { value: '', label: 'All hardware' },
+                                    { value: 'assigned', label: 'Assigned' },
+                                    { value: 'unassigned', label: 'Unassigned' },
+                                ]}
+                            />
+                        </div>
+
                         <div className="lg:col-span-2 flex items-center gap-1.5">
                             <button
                                 type="submit"
-                                className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-slate-800 dark:hover:bg-white transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                                className="flex-1 py-2 px-3 text-xs font-medium rounded-sm border border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white transition cursor-pointer flex items-center justify-center gap-1.5"
                             >
                                 <RiFilter3Line className="w-3.5 h-3.5" />
                                 <span>Filter</span>
@@ -419,7 +506,7 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
                                 <button
                                     type="button"
                                     onClick={clearFilters}
-                                    className="py-2 px-2.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    className="py-2 px-2.5 text-xs font-medium rounded-sm border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition cursor-pointer"
                                     title="Reset all filters"
                                 >
                                     <RiRefreshLine className="w-3.5 h-3.5" />
@@ -429,658 +516,799 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
                     </div>
                 </form>
 
-                {/* Toolbar: Total Count & Hint */}
-                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2 text-slate-500 dark:text-zinc-400 text-[11px]">
-                        <span className="font-semibold text-slate-800 dark:text-zinc-200">
-                            {employeeList.length} Staff Records
+                {/* Single clean toolbar */}
+                <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 tabular-nums">
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                            {employees.total} Employees
                         </span>
-                        {activeFilterCount > 0 && (
-                            <>
-                                <span>&bull;</span>
-                                <span>
-                                    Filtered by <strong className="text-slate-800 dark:text-zinc-200">{activeFilterCount}</strong> criteria
-                                </span>
-                            </>
-                        )}
-                        <span>&bull;</span>
-                        <span className="hidden sm:inline">Click any row or &quot;Edit&quot; to update employee profile</span>
+                        <span className="text-zinc-300 dark:text-zinc-700">&bull;</span>
+                        <span className="hidden sm:inline text-[11px]">
+                            Drag column dividers to resize or click headers to sort
+                        </span>
                     </div>
-                </div>
-            </div>
 
-            <div ref={tableContainerRef} className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs overflow-visible">
-                {/* Column Adjustment & Display Control Toolbar */}
-                <div className="px-4 py-2 bg-slate-50/70 dark:bg-zinc-800/40 border-b border-slate-200/70 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2 text-slate-500 dark:text-zinc-400 text-[11px]">
-                        <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-[#026eff]/10 text-[#026eff]">
-                            <RiArrowUpDownLine className="w-3 h-3" />
-                        </span>
-                        <span>Click any header to sort &bull; Drag dividers to resize</span>
-                    </div>
                     <div className="flex items-center gap-2 ml-auto">
                         <button
                             type="button"
-                            onClick={() => handleSort('created_at')}
-                            className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                                filters?.sort === 'created_at'
-                                    ? 'bg-[#026eff]/15 text-[#026eff] border-[#026eff]/30 dark:bg-[#026eff]/20 dark:text-sky-300'
-                                    : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700/60'
-                            }`}
-                            title="Sort employees chronologically by registration date"
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span>Sort Chronologically {filters?.sort === 'created_at' ? (filters?.direction === 'desc' ? '(Newest)' : '(Oldest)') : ''}</span>
-                        </button>
-
-                        <button
-                            type="button"
                             onClick={() => setWrapText(!wrapText)}
-                            className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                            className={`px-2.5 py-1 rounded-sm border text-[11px] font-medium transition cursor-pointer ${
                                 wrapText
-                                    ? 'bg-[#026eff]/15 text-[#026eff] border-[#026eff]/30 dark:bg-[#026eff]/20 dark:text-sky-300'
-                                    : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700/60'
+                                    ? 'bg-[#026eff]/10 text-[#026eff] border-[#026eff]/30 dark:text-sky-400'
+                                    : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                             }`}
-                            title="Toggle text wrapping to reveal long employee info without truncation"
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10l-3-3m0 6l3-3m5 3H4" />
-                            </svg>
-                            <span>{wrapText ? 'Wrap: ON' : 'Wrap: OFF'}</span>
+                            Wrap: {wrapText ? 'ON' : 'OFF'}
                         </button>
                         <button
                             type="button"
                             onClick={resetWidths}
-                            className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 text-[11px] font-medium transition cursor-pointer"
-                            title="Reset column widths to default"
+                            className="px-2.5 py-1 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 text-[11px] font-medium transition cursor-pointer"
                         >
                             Reset
                         </button>
                     </div>
                 </div>
-
-                <div className="overflow-x-auto min-h-[340px]">
-                    <table
-                        className="w-full text-left text-sm table-fixed"
-                        style={{ minWidth: `${Math.max(900, Object.values(widths).reduce((a, b) => a + b, 0))}px` }}
-                    >
-                        <thead className="bg-slate-50/80 dark:bg-zinc-800/60 border-b border-slate-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider whitespace-nowrap text-slate-500 dark:text-zinc-400">
-                            <tr>
-                                <ResizableTh
-                                    colKey="employee"
-                                    sortKey="name"
-                                    currentSort={filters?.sort || 'name'}
-                                    sortDirection={filters?.direction || 'asc'}
-                                    onSort={handleSort}
-                                    width={widths.employee}
-                                    onResizeStart={startResize}
-                                    onAutoExpand={autoExpandCol}
-                                    isResizing={resizingCol === 'employee'}
-                                >
-                                    Employee
-                                </ResizableTh>
-                                <ResizableTh
-                                    colKey="department"
-                                    sortKey="department"
-                                    currentSort={filters?.sort || 'name'}
-                                    sortDirection={filters?.direction || 'asc'}
-                                    onSort={handleSort}
-                                    width={widths.department}
-                                    onResizeStart={startResize}
-                                    onAutoExpand={autoExpandCol}
-                                    isResizing={resizingCol === 'department'}
-                                >
-                                    Department
-                                </ResizableTh>
-                                <ResizableTh
-                                    colKey="role_profile"
-                                    sortKey="role_profile"
-                                    currentSort={filters?.sort || 'name'}
-                                    sortDirection={filters?.direction || 'asc'}
-                                    onSort={handleSort}
-                                    width={widths.role_profile}
-                                    onResizeStart={startResize}
-                                    onAutoExpand={autoExpandCol}
-                                    isResizing={resizingCol === 'role_profile'}
-                                >
-                                    Role Profile
-                                </ResizableTh>
-                                <ResizableTh
-                                    colKey="hardware"
-                                    sortKey="hardware"
-                                    currentSort={filters?.sort || 'name'}
-                                    sortDirection={filters?.direction || 'asc'}
-                                    onSort={handleSort}
-                                    width={widths.hardware}
-                                    onResizeStart={startResize}
-                                    onAutoExpand={autoExpandCol}
-                                    isResizing={resizingCol === 'hardware'}
-                                >
-                                    Assigned Hardware
-                                </ResizableTh>
-                                <ResizableTh
-                                    colKey="specs"
-                                    sortKey="specs"
-                                    currentSort={filters?.sort || 'name'}
-                                    sortDirection={filters?.direction || 'asc'}
-                                    onSort={handleSort}
-                                    width={widths.specs}
-                                    onResizeStart={startResize}
-                                    onAutoExpand={autoExpandCol}
-                                    isResizing={resizingCol === 'specs'}
-                                >
-                                    Device Specs
-                                </ResizableTh>
-                                <ResizableTh
-                                    colKey="date"
-                                    sortKey="created_at"
-                                    currentSort={filters?.sort || 'name'}
-                                    sortDirection={filters?.direction || 'asc'}
-                                    onSort={handleSort}
-                                    width={widths.date}
-                                    onResizeStart={startResize}
-                                    onAutoExpand={autoExpandCol}
-                                    isResizing={resizingCol === 'date'}
-                                >
-                                    Registered
-                                </ResizableTh>
-                                <ResizableTh
-                                    colKey="actions"
-                                    width={widths.actions}
-                                    onResizeStart={startResize}
-                                    onAutoExpand={autoExpandCol}
-                                    isResizing={resizingCol === 'actions'}
-                                    align="right"
-                                    resizable={false}
-                                >
-                                    Actions
-                                </ResizableTh>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
-                            {employeeList.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="py-16 text-center text-slate-500 dark:text-zinc-400">
-                                        <div className="max-w-xs mx-auto text-center space-y-2">
-                                            <p className="font-semibold text-slate-700 dark:text-zinc-300 text-sm">No employees found</p>
-                                            <p className="text-xs text-slate-400 dark:text-zinc-500">
-                                                {search ? `No staff matching "${search}". Try another keyword or clear filters.` : 'Start by adding your first employee to the directory.'}
-                                            </p>
-                                            {search && (
-                                                <button
-                                                    type="button"
-                                                    onClick={clearSearch}
-                                                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#026eff] hover:underline pt-1 cursor-pointer"
-                                                >
-                                                    Clear Search
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                employeeList.map((emp, index) => {
-                                    const device = emp.active_assignment?.device;
-                                    const avatarSrc =
-                                        emp.profile_picture_url ||
-                                        (emp.profile_picture?.startsWith('public/')
-                                            ? `/${emp.profile_picture.slice(7)}`
-                                            : emp.profile_picture || '/user/default-profile-picture.png');
-
-                                    const isMenuOpen = openMenuId === emp.id;
-                                    const isNearBottom = index >= employeeList.length - 2 && employeeList.length > 2;
-
-                                    const actions = [
-                                        {
-                                            label: device ? 'Swap Device' : 'Match Device',
-                                            menuLabel: device ? 'Swap Device' : 'Match Device',
-                                            subtitle: device ? 'Switch assigned hardware' : 'Run AI hardware allocation',
-                                            href: route('match.index', { employee_id: emp.id }),
-                                            icon: device ? RiExchangeLine : RiCpuLine,
-                                            variant: device ? 'amber' : 'primary',
-                                        },
-                                        ...(device
-                                            ? [
-                                                  {
-                                                      label: 'Unassign',
-                                                      menuLabel: 'Unassign Hardware',
-                                                      subtitle: 'Return unit to available pool',
-                                                      onClick: () => handleUnassign(emp),
-                                                      icon: RiCloseCircleLine,
-                                                      variant: 'danger',
-                                                  },
-                                              ]
-                                            : []),
-                                        {
-                                            label: 'Edit',
-                                            menuLabel: 'Edit Employee',
-                                            subtitle: 'Update staff details & role',
-                                            onClick: () => openEdit(emp),
-                                            icon: RiEditLine,
-                                            variant: 'default',
-                                        },
-                                    ];
-
-                                    return (
-                                        <tr key={emp.id} className="hover:bg-slate-50/60 dark:hover:bg-zinc-800/40 transition">
-                                            {/* Employee Profile & Avatar */}
-                                            <td className="py-4 px-5">
-                                                <div className="flex items-center gap-3.5">
-                                                    <div className="relative w-11 h-11 rounded-full overflow-hidden bg-slate-100 dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 shrink-0 shadow-2xs">
-                                                        <img
-                                                            src={avatarSrc}
-                                                            alt={emp.name}
-                                                            className="w-full h-full object-cover"
-                                                            onError={(e) => {
-                                                                e.currentTarget.src = '/user/default-profile-picture.png';
-                                                             }}
-                                                        />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className={`font-bold text-slate-900 dark:text-zinc-100 text-sm ${wrapText ? 'break-words whitespace-normal' : 'truncate'}`} title={emp.name}>
-                                                            {emp.name}
-                                                        </div>
-                                                        <div className="text-xs text-slate-400 dark:text-zinc-500 font-mono font-medium mt-0.5">
-                                                            ID #{emp.id.toString().padStart(4, '0')}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            {/* Department */}
-                                            <td className="py-4 px-5 text-slate-600 dark:text-zinc-300 font-medium text-sm">
-                                                <div className={wrapText ? 'break-words whitespace-normal' : 'truncate'} title={emp.department}>
-                                                    {emp.department}
-                                                </div>
-                                            </td>
-
-                                            {/* Role Profile */}
-                                            <td className="py-4 px-5">
-                                                {emp.role_profile ? (
-                                                    <span className={`text-xs px-3 py-1 rounded-lg bg-[#026eff]/10 dark:bg-[#031a40]/60 border border-[#026eff]/15 dark:border-[#031a40]/50 text-[#026eff] dark:text-[#38bdf8] font-bold inline-block ${wrapText ? 'break-words whitespace-normal' : 'truncate max-w-full'}`} title={emp.role_profile.name}>
-                                                        {emp.role_profile.name}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-slate-400 dark:text-zinc-500 italic">No Profile Assigned</span>
-                                                )}
-                                            </td>
-
-                                            {/* Assigned Hardware */}
-                                            <td className="py-4 px-5">
-                                                {device ? (
-                                                    <div className="flex items-center gap-3.5">
-                                                        <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs p-0.5">
-                                                            <HardwareImage
-                                                                src={device.image_clip_url || device.image_url}
-                                                                alt={device.name}
-                                                                className="w-full h-full object-cover rounded-lg"
-                                                            />
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <span className="font-mono text-xs font-bold text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-slate-200 dark:border-zinc-700 inline-block truncate" title={device.asset_tag}>
-                                                                {device.asset_tag}
-                                                            </span>
-                                                            <div className={`font-bold text-slate-900 dark:text-zinc-100 text-sm mt-1 ${wrapText ? 'break-words whitespace-normal' : 'truncate'}`} title={`${device.brand} ${device.model}`}>
-                                                                {device.brand} {device.model}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200/60 dark:border-amber-900/40 inline-block">
-                                                        No Device Assigned
-                                                    </span>
-                                                )}
-                                            </td>
-
-                                            {/* Device Specs */}
-                                            <td className="py-4 px-5 text-xs text-slate-600 dark:text-zinc-300">
-                                                {device ? (
-                                                    <div className={`font-semibold text-slate-700 dark:text-zinc-300 leading-relaxed ${wrapText ? 'break-words whitespace-normal' : 'truncate'}`} title={`${device.ram_gb}GB • ${device.storage_gb}GB ${device.storage_type} • ${device.device_type}`}>
-                                                        {device.ram_gb}GB • {device.storage_gb}GB {device.storage_type} • <span className="capitalize font-medium">{device.device_type}</span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-slate-400 dark:text-zinc-600">—</span>
-                                                )}
-                                            </td>
-
-                                            {/* Chronological Registration Date */}
-                                            <td className="py-4 px-5 text-xs whitespace-nowrap">
-                                                <div className="font-bold text-slate-800 dark:text-zinc-200 text-xs">
-                                                    {emp.created_at ? new Date(emp.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                                                </div>
-                                                <div className="text-xs text-slate-400 dark:text-zinc-500 font-mono mt-0.5">
-                                                    {emp.created_at ? new Date(emp.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                </div>
-                                            </td>
-
-                                            {/* Actions */}
-                                            <td className="py-4 px-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                {isAdminOrManager ? (
-                                                    actions.length >= 2 ? (
-                                                    <div className="relative inline-flex items-center justify-end">
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setOpenMenuId(isMenuOpen ? null : emp.id);
-                                                            }}
-                                                            className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border transition cursor-pointer ${
-                                                                isMenuOpen
-                                                                    ? 'bg-[#026eff]/10 border-[#026eff]/30 text-[#026eff] dark:bg-[#026eff]/20 dark:text-[#0b79ff] shadow-sm'
-                                                                    : 'bg-white dark:bg-zinc-800/90 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-50 dark:hover:bg-zinc-700/60 shadow-2xs'
-                                                            }`}
-                                                            title="More Actions"
-                                                            aria-label="More Actions"
-                                                            aria-expanded={isMenuOpen}
-                                                        >
-                                                            <RiMoreFill className="w-4 h-4" />
-                                                        </button>
-
-                                                        {isMenuOpen && (
-                                                            <div
-                                                                className={`absolute right-0 z-50 w-56 p-1.5 backdrop-blur-xl bg-white/95 dark:bg-zinc-900/95 rounded-2xl border border-slate-200/90 dark:border-zinc-800/90 shadow-2xl shadow-slate-900/15 dark:shadow-black/70 ring-1 ring-black/5 dark:ring-white/10 ${
-                                                                    isNearBottom ? 'bottom-full mb-2 origin-bottom-right' : 'top-full mt-2 origin-top-right'
-                                                                }`}
-                                                            >
-                                                                <div className="px-3 py-2 bg-gradient-to-br from-slate-50 to-slate-100/60 dark:from-zinc-800/50 dark:to-zinc-900/50 rounded-xl border border-slate-100 dark:border-zinc-800/80 mb-1.5 flex items-center justify-between">
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-                                                                            Quick Actions
-                                                                        </div>
-                                                                        <div className="text-[11px] font-bold text-slate-800 dark:text-zinc-200 truncate">
-                                                                            {emp.name}
-                                                                        </div>
-                                                                    </div>
-                                                                    <span className="shrink-0 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">
-                                                                        #{emp.id.toString().padStart(4, '0')}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div className="space-y-0.5">
-                                                                    {actions.map((act, actIdx) => {
-                                                                        let badgeStyle = 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 group-hover:bg-[#026eff]/10 group-hover:text-[#026eff]';
-                                                                        let hoverStyle = 'text-slate-700 dark:text-zinc-200 hover:bg-slate-100/80 dark:hover:bg-zinc-800/70';
-
-                                                                        if (act.variant === 'primary') {
-                                                                            badgeStyle = 'bg-[#026eff]/10 dark:bg-[#026eff]/20 text-[#026eff] dark:text-[#38bdf8] group-hover:bg-[#026eff] group-hover:text-white';
-                                                                            hoverStyle = 'text-slate-800 dark:text-zinc-100 hover:bg-[#026eff]/10 dark:hover:bg-[#026eff]/20';
-                                                                        } else if (act.variant === 'amber') {
-                                                                            badgeStyle = 'bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white';
-                                                                            hoverStyle = 'text-slate-800 dark:text-zinc-100 hover:bg-amber-500/10 dark:hover:bg-amber-500/20';
-                                                                        } else if (act.variant === 'danger') {
-                                                                            badgeStyle = 'bg-rose-50 dark:bg-rose-950/50 text-rose-500 dark:text-rose-400 group-hover:bg-rose-600 group-hover:text-white';
-                                                                            hoverStyle = 'text-rose-600 dark:text-rose-400 hover:bg-rose-50/80 dark:hover:bg-rose-950/40';
-                                                                        }
-
-                                                                        return act.href ? (
-                                                                            <Link
-                                                                                key={actIdx}
-                                                                                href={act.href}
-                                                                                onClick={() => setOpenMenuId(null)}
-                                                                                className={`group flex items-center gap-2.5 w-full px-2.5 py-2 text-xs font-medium rounded-xl transition text-left cursor-pointer ${hoverStyle}`}
-                                                                            >
-                                                                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition ${badgeStyle}`}>
-                                                                                    <act.icon className="w-3.5 h-3.5" />
-                                                                                </div>
-                                                                                <div className="min-w-0 flex-1">
-                                                                                    <div className="truncate font-semibold">{act.menuLabel || act.label}</div>
-                                                                                    {act.subtitle && (
-                                                                                        <div className="text-[10px] text-slate-400 dark:text-zinc-500 truncate leading-tight mt-0.5">
-                                                                                            {act.subtitle}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </Link>
-                                                                        ) : (
-                                                                            <button
-                                                                                key={actIdx}
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    setOpenMenuId(null);
-                                                                                    act.onClick();
-                                                                                }}
-                                                                                className={`group flex items-center gap-2.5 w-full px-2.5 py-2 text-xs font-medium rounded-xl transition text-left cursor-pointer ${hoverStyle}`}
-                                                                            >
-                                                                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition ${badgeStyle}`}>
-                                                                                    <act.icon className="w-3.5 h-3.5" />
-                                                                                </div>
-                                                                                <div className="min-w-0 flex-1">
-                                                                                    <div className="truncate font-semibold">{act.menuLabel || act.label}</div>
-                                                                                    {act.subtitle && (
-                                                                                        <div className="text-[10px] text-slate-400 dark:text-zinc-500 truncate leading-tight mt-0.5">
-                                                                                            {act.subtitle}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                                                        {actions.map((act, actIdx) =>
-                                                            act.href ? (
-                                                                <Link
-                                                                    key={actIdx}
-                                                                    href={act.href}
-                                                                    className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-[#026eff] hover:text-white dark:bg-zinc-800 dark:hover:bg-[#026eff] text-slate-700 dark:text-zinc-200 transition shadow-2xs shrink-0 whitespace-nowrap"
-                                                                >
-                                                                    <span>{act.label}</span>
-                                                                </Link>
-                                                            ) : (
-                                                                <button
-                                                                    key={actIdx}
-                                                                    type="button"
-                                                                    onClick={act.onClick}
-                                                                    className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-xl transition cursor-pointer shadow-2xs shrink-0 whitespace-nowrap ${
-                                                                        act.variant === 'danger'
-                                                                            ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-600 hover:text-white'
-                                                                            : 'bg-slate-100 hover:bg-[#026eff] hover:text-white dark:bg-zinc-800 dark:hover:bg-[#026eff] text-slate-700 dark:text-zinc-200'
-                                                                    }`}
-                                                                >
-                                                                    <span>{act.label}</span>
-                                                                </button>
-                                                            )
-                                                        )}
-                                                    </div>
-                                                )
-                                            ) : (
-                                                <span className="text-xs text-slate-400 dark:text-zinc-500 italic">View Only</span>
-                                            )}
-                                        </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
             </div>
 
-            {/* Pagination Bar */}
-            {employees.links && employees.links.length > 3 && (
-                <div className="mt-5 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-2xs">
-                    <div className="text-slate-500 dark:text-zinc-400">
-                        Showing <span className="font-semibold text-slate-900 dark:text-zinc-100">{employees.from}</span> to <span className="font-semibold text-slate-900 dark:text-zinc-100">{employees.to}</span> of <span className="font-semibold text-slate-900 dark:text-zinc-100">{employees.total}</span> staff members
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                        {employees.links.map((link, idx) => (
-                            <Link
-                                key={idx}
-                                href={link.url || '#'}
-                                dangerouslySetInnerHTML={{ __html: link.label }}
-                                className={`px-3 py-1.5 text-xs rounded-xl font-medium transition ${
-                                    link.active
-                                        ? 'bg-[#026eff] text-white shadow-2xs'
-                                        : 'border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800'
-                                } ${!link.url ? 'opacity-40 pointer-events-none' : ''}`}
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Modal */}
-            {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-                    <div className="bg-white dark:bg-zinc-900 rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 dark:border-zinc-800">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-zinc-100">
-                                {editingEmp ? 'Edit Employee' : 'Add Employee'}
-                            </h3>
+            {/* Table */}
+            <div className="bg-white dark:bg-zinc-900 rounded-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                {employees.data.length === 0 ? (
+                    <div className="p-12 text-center">
+                        <RiUser3Line className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">No employees found</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                            Try adjusting your search query or department filters.
+                        </p>
+                        {activeFilterCount > 0 && (
                             <button
-                                onClick={() => setShowModal(false)}
-                                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                                aria-label="Close modal"
+                                type="button"
+                                onClick={clearFilters}
+                                className="mt-4 px-3.5 py-1.5 rounded-sm border border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium hover:bg-zinc-800 dark:hover:bg-white transition cursor-pointer"
                             >
-                                <RiCloseLine className="w-5 h-5" />
+                                Clear filters
                             </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table
+                            className="w-full text-left text-xs table-fixed"
+                            style={{ minWidth: `${Math.max(960, Object.values(widths).reduce((a, b) => a + b, 0))}px` }}
+                        >
+                            <thead className="bg-zinc-50/70 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800">
+                                <tr>
+                                    <ResizableTh
+                                        colKey="employee"
+                                        sortKey="name"
+                                        sortable
+                                        currentSort={filters.sort || 'name'}
+                                        sortDirection={filters.direction || 'asc'}
+                                        onSort={handleSort}
+                                        width={widths.employee}
+                                        onResizeStart={startResize}
+                                        onAutoExpand={autoExpandCol}
+                                        isResizing={resizingCol === 'employee'}
+                                    >
+                                        Employee
+                                    </ResizableTh>
+                                    <ResizableTh
+                                        colKey="department"
+                                        sortKey="department"
+                                        sortable
+                                        currentSort={filters.sort}
+                                        sortDirection={filters.direction}
+                                        onSort={handleSort}
+                                        width={widths.department}
+                                        onResizeStart={startResize}
+                                        onAutoExpand={autoExpandCol}
+                                        isResizing={resizingCol === 'department'}
+                                    >
+                                        Department
+                                    </ResizableTh>
+                                    <ResizableTh
+                                        colKey="role_profile"
+                                        width={widths.role_profile}
+                                        onResizeStart={startResize}
+                                        onAutoExpand={autoExpandCol}
+                                        isResizing={resizingCol === 'role_profile'}
+                                    >
+                                        Role Profile
+                                    </ResizableTh>
+                                    <ResizableTh
+                                        colKey="hardware"
+                                        width={widths.hardware}
+                                        onResizeStart={startResize}
+                                        onAutoExpand={autoExpandCol}
+                                        isResizing={resizingCol === 'hardware'}
+                                    >
+                                        Assigned Hardware
+                                    </ResizableTh>
+                                    <ResizableTh
+                                        colKey="specs"
+                                        width={widths.specs}
+                                        onResizeStart={startResize}
+                                        onAutoExpand={autoExpandCol}
+                                        isResizing={resizingCol === 'specs'}
+                                    >
+                                        Hardware / Min Specs
+                                    </ResizableTh>
+                                    <ResizableTh
+                                        colKey="date"
+                                        sortKey="created_at"
+                                        sortable
+                                        currentSort={filters.sort}
+                                        sortDirection={filters.direction}
+                                        onSort={handleSort}
+                                        width={widths.date}
+                                        onResizeStart={startResize}
+                                        onAutoExpand={autoExpandCol}
+                                        isResizing={resizingCol === 'date'}
+                                    >
+                                        Registered
+                                    </ResizableTh>
+                                    <ResizableTh
+                                        colKey="actions"
+                                        align="right"
+                                        resizable={false}
+                                        width={widths.actions}
+                                    >
+                                        Actions
+                                    </ResizableTh>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                                {employees.data.map((emp, idx) => {
+                                    const activeAssignment = emp.active_assignment;
+                                    const activeAssignments = emp.active_assignments || (activeAssignment ? [activeAssignment] : []);
+                                    const activeLicenses = emp.active_license_assignments || [];
+                                    const extraGearCount = Math.max(0, activeAssignments.length - (activeAssignment ? 1 : 0));
+                                    const device = activeAssignment?.device;
+                                    const roleProfile = emp.role_profile;
+                                    const isBottomRow = idx >= employees.data.length - 2 && employees.data.length > 3;
+
+                                    return (
+                                        <tr
+                                            key={emp.id}
+                                            className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors"
+                                        >
+                                            <td className="py-3 px-4 align-middle">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <img
+                                                        src={resolveAvatarUrl(emp)}
+                                                        alt={emp.name}
+                                                        onError={(e) => {
+                                                            e.currentTarget.onerror = null;
+                                                            e.currentTarget.src = DEFAULT_AVATAR;
+                                                        }}
+                                                        className="w-8 h-8 rounded-sm object-cover bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div
+                                                            className={`text-xs font-medium text-zinc-900 dark:text-zinc-100 ${
+                                                                wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                            }`}
+                                                        >
+                                                            {emp.name}
+                                                        </div>
+                                                        {emp.notes && (
+                                                            <div
+                                                                className={`text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 ${
+                                                                    wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                                }`}
+                                                            >
+                                                                {emp.notes}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td className="py-3 px-4 align-middle">
+                                                <span
+                                                    className={`inline-block text-xs text-zinc-700 dark:text-zinc-300 ${
+                                                        wrapText ? 'whitespace-normal wrap-break-word' : 'truncate max-w-full'
+                                                    }`}
+                                                >
+                                                    {emp.department}
+                                                </span>
+                                            </td>
+
+                                            <td className="py-3 px-4 align-middle">
+                                                {roleProfile ? (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-sm border border-zinc-200 dark:border-zinc-700 text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                                                        {roleProfile.name}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+                                                        No role profile
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            <td className="py-3 px-4 align-middle">
+                                                {device ? (
+                                                    <div className="min-w-0">
+                                                        <Link
+                                                            href={route('devices.show', device.id)}
+                                                            className={`block font-medium text-zinc-900 dark:text-zinc-100 hover:text-[#026eff] dark:hover:text-sky-400 transition ${
+                                                                wrapText ? 'whitespace-normal wrap-break-word' : 'truncate'
+                                                            }`}
+                                                        >
+                                                            {device.brand} {device.model}
+                                                        </Link>
+                                                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                                            <span className="font-mono tabular-nums">{device.asset_tag}</span>
+                                                            {activeAssignment.match_score != null && (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-medium tabular-nums">
+                                                                    {Math.round(
+                                                                        activeAssignment.match_score <= 1
+                                                                            ? activeAssignment.match_score * 100
+                                                                            : activeAssignment.match_score
+                                                                    )}% fit
+                                                                </span>
+                                                            )}
+                                                            {(extraGearCount > 0 || activeLicenses.length > 0) && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setCustodyTargetId(emp.id)}
+                                                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-[#026eff]/25 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 text-[10px] font-medium hover:bg-[#026eff]/15 transition cursor-pointer"
+                                                                    title="Inspect all assigned gear and licenses"
+                                                                >
+                                                                    {extraGearCount > 0 && <span>+{extraGearCount} gear</span>}
+                                                                    {extraGearCount > 0 && activeLicenses.length > 0 && <span>&middot;</span>}
+                                                                    {activeLicenses.length > 0 && <span>{activeLicenses.length} lic</span>}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-amber-500/20 text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                                                            <span className="w-1.5 h-1.5 rounded-sm bg-amber-500" />
+                                                            Unassigned
+                                                        </span>
+                                                        {activeLicenses.length > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setCustodyTargetId(emp.id)}
+                                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-[#026eff]/25 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 text-[10px] font-medium hover:bg-[#026eff]/15 transition cursor-pointer"
+                                                            >
+                                                                <RiKey2Line className="w-3 h-3" />
+                                                                <span>{activeLicenses.length} lic</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
+
+                                            <td className="py-3 px-4 align-middle">
+                                                {device ? (
+                                                    ['laptop', 'desktop'].includes(device.device_type) ? (
+                                                        <div className="text-[11px] text-zinc-600 dark:text-zinc-300 font-mono tabular-nums">
+                                                            <span className="uppercase">{device.cpu_tier || 'N/A'}</span>
+                                                            <span className="mx-1 text-zinc-300 dark:text-zinc-700">/</span>
+                                                            <span>{device.ram_gb || 0}GB</span>
+                                                            <span className="mx-1 text-zinc-300 dark:text-zinc-700">/</span>
+                                                            <span>{device.storage_gb || 0}GB</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-[11px] text-zinc-600 dark:text-zinc-300 truncate">
+                                                            {device.spec_summary || device.device_type}
+                                                        </div>
+                                                    )
+                                                ) : roleProfile ? (
+                                                    <div className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                                                        Min: <span className="uppercase font-mono">{roleProfile.min_cpu_tier}</span> /{' '}
+                                                        {roleProfile.min_ram_gb}GB / {roleProfile.min_storage_gb}GB
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500">—</span>
+                                                )}
+                                            </td>
+
+                                            <td className="py-3 px-4 align-middle text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
+                                                {emp.created_at
+                                                    ? new Date(emp.created_at).toLocaleDateString('en-US', {
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                          year: 'numeric',
+                                                      })
+                                                    : '—'}
+                                            </td>
+
+                                            <td className="py-3 px-4 align-middle text-right">
+                                                <div className="inline-flex items-center justify-end gap-1" data-emp-menu>
+                                                    <Link
+                                                        href={route('match.index', { employee_id: emp.id })}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:border-[#026eff] hover:text-[#026eff] dark:hover:text-sky-400 transition"
+                                                        title="Match hardware for employee"
+                                                    >
+                                                        <RiSparkling2Line className="w-3 h-3 text-[#026eff]" />
+                                                        <span>Match</span>
+                                                    </Link>
+
+                                                    <div className="relative">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setOpenMenuId((prev) => (prev === emp.id ? null : emp.id))}
+                                                            className="p-1.5 rounded-sm border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition cursor-pointer"
+                                                            aria-label="Employee actions"
+                                                        >
+                                                            <RiMore2Fill className="w-4 h-4" />
+                                                        </button>
+
+                                                        {openMenuId === emp.id && (
+                                                            <div
+                                                                className={`absolute right-0 w-44 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 py-1 z-30 text-left ${
+                                                                    isBottomRow ? 'bottom-full mb-1' : 'top-full mt-1'
+                                                                }`}
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setOpenMenuId(null);
+                                                                        setCustodyTargetId(emp.id);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                                                >
+                                                                    <RiComputerLine className="w-3.5 h-3.5 text-zinc-400" />
+                                                                    <span>Assets &amp; Licenses</span>
+                                                                </button>
+
+                                                                {device && (
+                                                                    <Link
+                                                                        href={route('devices.show', device.id)}
+                                                                        className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                                                                        onClick={() => setOpenMenuId(null)}
+                                                                    >
+                                                                        <RiExternalLinkLine className="w-3.5 h-3.5 text-zinc-400" />
+                                                                        <span>Inspect Device</span>
+                                                                    </Link>
+                                                                )}
+
+                                                                {isAdminOrManager && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openEditModal(emp)}
+                                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                                                    >
+                                                                        <RiEditLine className="w-3.5 h-3.5 text-zinc-400" />
+                                                                        <span>Edit Employee</span>
+                                                                    </button>
+                                                                )}
+
+                                                                {isAdminOrManager && activeAssignment && (
+                                                                    <>
+                                                                        <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setOpenMenuId(null);
+                                                                                setUnassignTarget(emp);
+                                                                            }}
+                                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                                                        >
+                                                                            <RiLinkUnlink className="w-3.5 h-3.5" />
+                                                                            <span>Unassign Device</span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            <Pagination
+                links={employees.links}
+                from={employees.from}
+                to={employees.to}
+                total={employees.total}
+                label="employees"
+            />
+
+            {/* Create / Edit Employee Modal */}
+            <Modal show={showModal} onClose={closeModal} maxWidth="lg">
+                <form onSubmit={handleSubmit} className="p-6">
+                    <div className="flex items-start justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                        <div>
+                            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                                {editingEmp ? `Edit ${editingEmp.name}` : 'Register Employee'}
+                            </h2>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                {editingEmp
+                                    ? 'Update profile photo, department, and baseline workload role.'
+                                    : 'Add a team member to assign workstation hardware and role profiles.'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeModal}
+                            className="p-1.5 rounded-sm border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                            aria-label="Close modal"
+                        >
+                            <RiCloseLine className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="mt-5 space-y-4">
+                        {/* Avatar uploader */}
+                        <div className="flex items-center gap-4 p-3 rounded-sm bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800">
+                            <img
+                                src={filePreview || DEFAULT_AVATAR}
+                                alt="Avatar preview"
+                                onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = DEFAULT_AVATAR;
+                                }}
+                                className="w-14 h-14 rounded-sm object-cover bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                                <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                                    Profile Picture
+                                </div>
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                    PNG, JPG, WebP, or GIF up to 5MB.
+                                </p>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp,image/gif"
+                                        onChange={handleFileChange}
+                                        className="hidden"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    >
+                                        <RiUpload2Line className="w-3.5 h-3.5" />
+                                        <span>Upload photo</span>
+                                    </button>
+                                    {(filePreview && filePreview !== DEFAULT_AVATAR) && (
+                                        <button
+                                            type="button"
+                                            onClick={handleClearAvatar}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-rose-500/20 text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                                        >
+                                            <RiDeleteBinLine className="w-3.5 h-3.5" />
+                                            <span>Reset</span>
+                                        </button>
+                                    )}
+                                </div>
+                                <InputError message={errors.profile_picture_file || errors.profile_picture} className="mt-1.5" />
+                            </div>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-zinc-300">
-                                    Full Name <span className="text-rose-500 font-bold ml-0.5">*</span>
-                                </label>
-                                <input
+                                <InputLabel htmlFor="emp_name" value="Full Name *" />
+                                <TextInput
+                                    id="emp_name"
                                     type="text"
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
-                                    placeholder="e.g. Maya Lin"
-                                    className="mt-1 w-full rounded-xl border-[1.5px] border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 text-sm py-2 px-3 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 shadow-2xs"
+                                    className="mt-1.5 block w-full text-xs"
+                                    placeholder="e.g. Elena Rostova"
                                     required
                                 />
-                                {errors.name && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.name}</p>}
+                                <InputError message={errors.name} className="mt-1" />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-zinc-300">
-                                    Department <span className="text-rose-500 font-bold ml-0.5">*</span>
-                                </label>
-                                <input
+                                <InputLabel htmlFor="emp_dept" value="Department *" />
+                                <TextInput
+                                    id="emp_dept"
                                     type="text"
+                                    list="emp-departments-list"
                                     value={data.department}
                                     onChange={(e) => setData('department', e.target.value)}
-                                    placeholder="e.g. Engineering, Design, Finance"
-                                    className="mt-1 w-full rounded-xl border-[1.5px] border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 text-sm py-2 px-3 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 shadow-2xs"
+                                    className="mt-1.5 block w-full text-xs"
+                                    placeholder="e.g. Engineering"
                                     required
                                 />
-                                {errors.department && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.department}</p>}
+                                <datalist id="emp-departments-list">
+                                    {departments.map((d) => (
+                                        <option key={d} value={d} />
+                                    ))}
+                                </datalist>
+                                <InputError message={errors.department} className="mt-1" />
                             </div>
+                        </div>
 
-                            {/* Profile Picture Upload & Preview */}
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-zinc-300 mb-1.5">Profile Picture</label>
-                                
-                                <div className="flex items-center gap-4 p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/30">
-                                    <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 dark:bg-zinc-700 border-2 border-white dark:border-zinc-800 shrink-0 shadow-sm">
-                                        <img
-                                            src={
-                                                filePreview ||
-                                                (data.profile_picture?.startsWith('public/')
-                                                    ? `/${data.profile_picture.slice(7)}`
-                                                    : data.profile_picture || '/user/default-profile-picture.png')
-                                            }
-                                            alt="Avatar Preview"
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => {
-                                                e.currentTarget.src = '/user/default-profile-picture.png';
-                                            }}
-                                        />
-                                    </div>
-
-                                    <div className="flex-1 min-w-0">
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            accept="image/png,image/jpeg,image/webp,image/gif"
-                                            onChange={handleFileChange}
-                                            className="hidden"
-                                            id="employee-avatar-upload"
-                                        />
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 transition cursor-pointer shadow-2xs"
-                                            >
-                                                <svg className="w-3.5 h-3.5 text-[#026eff]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                                <span>{data.profile_picture_file ? 'Change Photo' : 'Upload Photo'}</span>
-                                            </button>
-
-                                            {(data.profile_picture_file || (data.profile_picture && data.profile_picture !== 'public/user/default-profile-picture.png')) && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleClearPhoto}
-                                                    className="text-xs text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
-                                                >
-                                                    Use Default
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1 truncate">
-                                            {data.profile_picture_file
-                                                ? `${data.profile_picture_file.name} (${(data.profile_picture_file.size / 1024).toFixed(1)} KB)`
-                                                : 'PNG, JPG, WEBP up to 5MB. Defaults to corporate icon.'}
-                                        </p>
-                                    </div>
-                                </div>
-                                {errors.profile_picture_file && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.profile_picture_file}</p>}
-                                {errors.profile_picture && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.profile_picture}</p>}
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-zinc-300 mb-1">Role / Workload Profile</label>
+                        <div>
+                            <InputLabel htmlFor="emp_role_profile" value="Role Profile (Workload Baseline)" />
+                            <div className="mt-1.5">
                                 <CustomSelect
                                     value={data.role_profile_id}
                                     onChange={(val) => setData('role_profile_id', val)}
-                                    placeholder="No Profile Assigned"
-                                    options={role_profiles.map((p) => ({
-                                        value: p.id,
-                                        label: p.name,
-                                    }))}
+                                    placeholder="Select role profile..."
+                                    options={[
+                                        { value: '', label: 'None / Custom evaluation only' },
+                                        ...role_profiles.map((rp) => ({
+                                            value: String(rp.id),
+                                            label: `${rp.name} (${rp.min_cpu_tier?.toUpperCase()} / ${rp.min_ram_gb}GB RAM)`,
+                                        })),
+                                    ]}
                                 />
                             </div>
+                            <InputError message={errors.role_profile_id} className="mt-1" />
+                        </div>
 
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-zinc-300">Notes</label>
-                                <textarea
-                                    rows={2}
-                                    value={data.notes}
-                                    onChange={(e) => setData('notes', e.target.value)}
-                                    placeholder="Special requirements or location..."
-                                    className="mt-1 w-full rounded-xl border-[1.5px] border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 text-sm py-2 px-3 focus:border-[#026eff] focus:ring-2 focus:ring-[#026eff]/20 shadow-2xs"
-                                />
-                            </div>
+                        <div>
+                            <InputLabel htmlFor="emp_notes" value="Workstation & Custodian Notes" />
+                            <textarea
+                                id="emp_notes"
+                                rows={3}
+                                value={data.notes}
+                                onChange={(e) => setData('notes', e.target.value)}
+                                placeholder="Optional seating location, accessory preferences, or accessibility needs..."
+                                className="mt-1.5 block w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 py-2 px-3 focus:outline-none focus:border-[#026eff] focus:ring-0"
+                            />
+                            <InputError message={errors.notes} className="mt-1" />
+                        </div>
+                    </div>
 
-                            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-zinc-800">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 transition cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="px-5 py-2 rounded-xl bg-[#026eff] text-white text-xs font-semibold hover:bg-[#0256cc] shadow-sm transition disabled:opacity-50 cursor-pointer"
-                                >
-                                    {editingEmp ? 'Save Changes' : 'Add Employee'}
-                                </button>
-                            </div>
-                        </form>
+                    <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-2">
+                        <SecondaryButton type="button" onClick={closeModal}>
+                            Cancel
+                        </SecondaryButton>
+                        <PrimaryButton type="submit" disabled={processing}>
+                            {processing ? 'Saving...' : editingEmp ? 'Save Changes' : 'Register Employee'}
+                        </PrimaryButton>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* Unassign Hardware Confirmation Modal */}
+            <Modal show={Boolean(unassignTarget)} onClose={() => setUnassignTarget(null)} maxWidth="sm">
+                <div className="p-6">
+                    <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-sm border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                            <RiComputerLine className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                                Unassign Hardware
+                            </h3>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                                Return{' '}
+                                <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                                    {unassignTarget?.active_assignment?.device?.brand}{' '}
+                                    {unassignTarget?.active_assignment?.device?.model}
+                                </span>{' '}
+                                ({unassignTarget?.active_assignment?.device?.asset_tag}) from{' '}
+                                <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                                    {unassignTarget?.name}
+                                </span>{' '}
+                                back into available stockroom inventory?
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-end gap-2">
+                        <SecondaryButton type="button" onClick={() => setUnassignTarget(null)}>
+                            Cancel
+                        </SecondaryButton>
+                        <DangerButton type="button" onClick={confirmUnassign} disabled={unassigning}>
+                            {unassigning ? 'Unassigning...' : 'Confirm Unassign'}
+                        </DangerButton>
                     </div>
                 </div>
-            )}
+            </Modal>
+
+            {/* Import Employees CSV Modal */}
+            <Modal show={showImportModal} onClose={closeImportModal} maxWidth="md">
+                <form onSubmit={handleImportSubmit} className="p-6">
+                    <div className="flex items-start justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                        <div>
+                            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                                Import Employees from CSV
+                            </h3>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                Bulk add or update staff records matched by name and department.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeImportModal}
+                            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition cursor-pointer"
+                        >
+                            <RiCloseLine className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="mt-4 space-y-4">
+                        <div className="p-3 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 text-xs text-zinc-600 dark:text-zinc-300 space-y-1">
+                            <div className="font-medium text-zinc-800 dark:text-zinc-200">Expected CSV Columns</div>
+                            <code className="block font-mono text-[11px] text-[#026eff] dark:text-sky-400">
+                                name, department, role_profile, notes
+                            </code>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                                <span className="font-medium">name</span> and <span className="font-medium">department</span> are required. Matching <span className="font-medium">role_profile</span> names are linked automatically.
+                            </p>
+                        </div>
+
+                        <div>
+                            <InputLabel htmlFor="employees_csv_file" value="CSV File *" />
+                            <input
+                                ref={csvInputRef}
+                                id="employees_csv_file"
+                                type="file"
+                                accept=".csv,text/csv"
+                                onChange={(e) => setImportData('file', e.target.files?.[0] || null)}
+                                required
+                                className="mt-1.5 block w-full text-xs text-zinc-700 dark:text-zinc-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-sm file:border file:border-zinc-200 dark:file:border-zinc-700 file:text-xs file:font-medium file:bg-white dark:file:bg-zinc-900 file:text-zinc-700 dark:file:text-zinc-200 hover:file:bg-zinc-50 dark:hover:file:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 p-1.5 bg-white dark:bg-zinc-950 cursor-pointer"
+                            />
+                            <InputError message={importErrors.file} className="mt-1.5" />
+                        </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-2">
+                        <SecondaryButton type="button" onClick={closeImportModal}>
+                            Cancel
+                        </SecondaryButton>
+                        <PrimaryButton type="submit" disabled={importingCsv || !importData.file}>
+                            {importingCsv ? 'Importing...' : 'Import CSV'}
+                        </PrimaryButton>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* Employee Multi-Asset Custody & Software Licenses Modal */}
+            <Modal show={Boolean(custodyTarget)} onClose={() => setCustodyTargetId(null)} maxWidth="lg">
+                <div className="p-6">
+                    <div className="flex items-start justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                        <div>
+                            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                                Assets &amp; Licenses Custody &mdash; {custodyTarget?.name}
+                            </h3>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                {custodyTarget?.department} &bull;{' '}
+                                {custodyTarget?.role_profile?.name || 'No Role Profile'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setCustodyTargetId(null)}
+                            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition cursor-pointer"
+                        >
+                            <RiCloseLine className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="mt-4 space-y-5 max-h-[65vh] overflow-y-auto pr-1">
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                                    Assigned Hardware ({custodyTarget?.active_assignments?.length || 0})
+                                </h4>
+                            </div>
+
+                            {(!custodyTarget?.active_assignments || custodyTarget.active_assignments.length === 0) ? (
+                                <p className="text-xs text-zinc-400 dark:text-zinc-500 py-3 border border-dashed border-zinc-200 dark:border-zinc-800 text-center">
+                                    No hardware assets currently assigned.
+                                </p>
+                            ) : (
+                                <div className="divide-y divide-zinc-100 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800">
+                                    {custodyTarget.active_assignments.map((asg) => (
+                                        <div key={asg.id} className="p-3 flex items-center justify-between gap-3 bg-white dark:bg-zinc-950/40">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <Link
+                                                        href={route('devices.show', asg.device?.id)}
+                                                        className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:text-[#026eff] dark:hover:text-sky-400 truncate"
+                                                    >
+                                                        {asg.device?.brand} {asg.device?.model}
+                                                    </Link>
+                                                    <span className="font-mono text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
+                                                        {asg.device?.asset_tag}
+                                                    </span>
+                                                    <span className="capitalize text-[10px] px-1.5 py-0.5 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 border border-[#026eff]/20">
+                                                        {asg.device?.device_type}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 truncate">
+                                                    {asg.device?.spec_summary}
+                                                </div>
+                                            </div>
+
+                                            {isAdminOrManager && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        router.post(
+                                                            route('employees.unassign', custodyTarget.id),
+                                                            { assignment_id: asg.id },
+                                                            { preserveScroll: true }
+                                                        )
+                                                    }
+                                                    className="px-2.5 py-1 rounded-sm border border-rose-500/25 text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer shrink-0"
+                                                >
+                                                    Unassign
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                                    Software Licenses ({custodyTarget?.active_license_assignments?.length || 0})
+                                </h4>
+                                <Link
+                                    href={route('licenses.index')}
+                                    className="text-[11px] font-medium text-[#026eff] dark:text-sky-400 hover:underline"
+                                >
+                                    Manage Licenses &rarr;
+                                </Link>
+                            </div>
+
+                            {(!custodyTarget?.active_license_assignments || custodyTarget.active_license_assignments.length === 0) ? (
+                                <p className="text-xs text-zinc-400 dark:text-zinc-500 py-3 border border-dashed border-zinc-200 dark:border-zinc-800 text-center">
+                                    No active software license seats assigned.
+                                </p>
+                            ) : (
+                                <div className="divide-y divide-zinc-100 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800">
+                                    {custodyTarget.active_license_assignments.map((licAsg) => (
+                                        <div key={licAsg.id} className="p-3 flex items-center justify-between gap-3 bg-white dark:bg-zinc-950/40">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                                                        {licAsg.license?.name}
+                                                    </span>
+                                                    <span className="capitalize text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
+                                                        {licAsg.license?.license_type}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                                    {licAsg.license?.vendor} &bull;{' '}
+                                                    {licAsg.license?.category}
+                                                </div>
+                                            </div>
+
+                                            {isAdminOrManager && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        router.post(
+                                                            route('licenses.revoke', licAsg.id),
+                                                            {},
+                                                            { preserveScroll: true }
+                                                        )
+                                                    }
+                                                    className="px-2.5 py-1 rounded-sm border border-rose-500/25 text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer shrink-0"
+                                                >
+                                                    Revoke
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-5 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+                        <SecondaryButton type="button" onClick={() => setCustodyTargetId(null)}>
+                            Close
+                        </SecondaryButton>
+                    </div>
+                </div>
+            </Modal>
         </AuthenticatedLayout>
     );
 }

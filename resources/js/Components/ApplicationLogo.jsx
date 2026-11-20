@@ -1,5 +1,5 @@
-import SpecMatchLogo from './SpecMatchLogo';
+import ITFleetLogo from './ITFleetLogo';
 
 export default function ApplicationLogo(props) {
-    return <SpecMatchLogo variant="stacked" size={36} showBadge={true} {...props} />;
+    return <ITFleetLogo variant="stacked" size={36} showBadge={true} {...props} />;
 }

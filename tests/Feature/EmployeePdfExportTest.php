@@ -72,7 +72,7 @@ class EmployeePdfExportTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertHeader('content-type', 'application/pdf');
-        $this->assertStringContainsString('specmatch-staff-directory-', $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('itfleet-staff-directory-', $response->headers->get('content-disposition'));
     }
 
     public function test_authenticated_user_can_view_employees_index_with_stats_and_filters(): void
