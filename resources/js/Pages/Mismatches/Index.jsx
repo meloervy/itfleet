@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 import {
     RiArrowRightUpLine,
@@ -28,6 +28,8 @@ const formatPct = (val) => {
 };
 
 export default function MismatchesIndex({ mismatches = [], threshold = 0.65 }) {
+    const { auth } = usePage().props;
+    const isAdminOrManager = ['admin', 'manager'].includes(auth?.user?.role);
     const thresholdPct = formatPct(threshold);
     const [filterType, setFilterType] = useState('all'); // 'all' | 'under-provisioned' | 'over-provisioned'
     const [search, setSearch] = useState('');
@@ -84,13 +86,15 @@ export default function MismatchesIndex({ mismatches = [], threshold = 0.65 }) {
                             <RiShieldCheckLine className="w-3.5 h-3.5 text-zinc-500" />
                             <span>Role Baselines</span>
                         </Link>
-                        <Link
-                            href={route('match.index')}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-xs font-medium text-white transition"
-                        >
-                            <RiSparkling2Line className="w-3.5 h-3.5" />
-                            <span>Open Match Engine</span>
-                        </Link>
+                        {isAdminOrManager && (
+                            <Link
+                                href={route('match.index')}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-xs font-medium text-white transition"
+                            >
+                                <RiSparkling2Line className="w-3.5 h-3.5" />
+                                <span>Open Match Engine</span>
+                            </Link>
+                        )}
                     </div>
                 </div>
             }
@@ -303,13 +307,15 @@ export default function MismatchesIndex({ mismatches = [], threshold = 0.65 }) {
                                             {formatPct(score)}% fit
                                         </span>
 
-                                        <Link
-                                            href={route('match.index', { employee_id: employee?.id })}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-[11px] font-medium text-white transition"
-                                        >
-                                            <RiSparkling2Line className="w-3.5 h-3.5" />
-                                            <span>Re-match</span>
-                                        </Link>
+                                        {isAdminOrManager && (
+                                            <Link
+                                                href={route('match.index', { employee_id: employee?.id })}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-[11px] font-medium text-white transition"
+                                            >
+                                                <RiSparkling2Line className="w-3.5 h-3.5" />
+                                                <span>Re-match</span>
+                                            </Link>
+                                        )}
                                     </div>
                                 </div>
 

@@ -57,6 +57,8 @@ RUN mkdir -p /app/database /app/storage/framework/cache /app/storage/framework/s
 
 ENV APP_ENV=production
 ENV APP_DEBUG=false
+ENV LOG_CHANNEL=stderr
+ENV PHP_CLI_SERVER_WORKERS=4
 ENV PORT=8080
 
 EXPOSE 8080

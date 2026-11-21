@@ -283,4 +283,38 @@ class SoftwareLicenseManagementTest extends TestCase
                 ->where('licenses.data.0.annualized_cost', null)
             );
     }
+
+    public function test_software_licenses_pdf_export_respects_rbac(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $manager = User::factory()->manager()->create();
+        $technician = User::factory()->technician()->create();
+        $viewer = User::factory()->viewer()->create();
+
+        SoftwareLicense::create([
+            'name' => 'Figma Organization',
+            'vendor' => 'Figma Inc.',
+            'category' => 'design',
+            'license_type' => 'saas',
+            'billing_cycle' => 'annual',
+            'total_seats' => 10,
+            'cost_per_seat' => 29500.00,
+            'renewal_date' => now()->addMonths(4)->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->get(route('licenses.export.pdf'))->assertRedirect('/login');
+        $this->actingAs($technician)->get(route('licenses.export.pdf'))->assertForbidden();
+        $this->actingAs($viewer)->get(route('licenses.export.pdf'))->assertForbidden();
+
+        foreach ([$admin, $manager] as $authorized) {
+            $res = $this->actingAs($authorized)->get(route('licenses.export.pdf'));
+            $res->assertOk();
+            $res->assertHeader('content-type', 'application/pdf');
+            $this->assertStringContainsString(
+                'itfleet-software-licenses-',
+                (string) $res->headers->get('content-disposition')
+            );
+        }
+    }
 }

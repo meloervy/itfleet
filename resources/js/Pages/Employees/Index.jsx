@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Checkbox from '@/Components/Checkbox';
 import CustomSelect from '@/Components/CustomSelect';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
@@ -11,14 +12,18 @@ import DangerButton from '@/Components/DangerButton';
 import TextInput from '@/Components/TextInput';
 import { useResizableColumns } from '@/Hooks/useResizableColumns';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
 import {
     RiAddLine,
+    RiAlertLine,
+    RiCheckLine,
     RiCloseLine,
     RiComputerLine,
     RiDeleteBinLine,
     RiDownload2Line,
     RiEditLine,
+    RiExchangeLine,
     RiExternalLinkLine,
     RiFilePdfLine,
     RiFilter3Line,
@@ -27,6 +32,7 @@ import {
     RiMore2Fill,
     RiRefreshLine,
     RiSearchLine,
+    RiShieldCheckLine,
     RiSparkling2Line,
     RiUpload2Line,
     RiUser3Line,
@@ -62,6 +68,18 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
     const [unassignTarget, setUnassignTarget] = useState(null);
     const [custodyTargetId, setCustodyTargetId] = useState(null);
     const custodyTarget = employees.data.find((e) => e.id === custodyTargetId) || null;
+
+    const [offboardTarget, setOffboardTarget] = useState(null);
+    const [offboardForm, setOffboardForm] = useState({
+        reason: 'resignation',
+        condition: 'good',
+        wipe_confirmed: false,
+        revoke_licenses: true,
+        notes: '',
+    });
+    const [offboardSubmitting, setOffboardSubmitting] = useState(false);
+    const [offboardError, setOffboardError] = useState(null);
+    const [offboardResult, setOffboardResult] = useState(null);
 
     const fileInputRef = useRef(null);
     const csvInputRef = useRef(null);
@@ -283,6 +301,53 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
         });
     };
 
+    const openOffboardModal = (emp) => {
+        setOpenMenuId(null);
+        setCustodyTargetId(null);
+        setOffboardTarget(emp);
+        setOffboardForm({
+            reason: 'resignation',
+            condition: 'good',
+            wipe_confirmed: false,
+            revoke_licenses: true,
+            notes: '',
+        });
+        setOffboardError(null);
+        setOffboardResult(null);
+    };
+
+    const closeOffboardModal = () => {
+        setOffboardTarget(null);
+        setOffboardError(null);
+        setOffboardResult(null);
+    };
+
+    const handleOffboardSubmit = async (e) => {
+        e.preventDefault();
+        if (!offboardTarget || offboardSubmitting) return;
+
+        setOffboardSubmitting(true);
+        setOffboardError(null);
+
+        try {
+            const res = await axios.post(
+                route('employees.offboard', offboardTarget.id),
+                offboardForm,
+                { headers: { Accept: 'application/json' } }
+            );
+            setOffboardResult(res.data);
+            router.reload({ only: ['employees', 'stats'] });
+        } catch (err) {
+            const msg =
+                err.response?.data?.message ||
+                Object.values(err.response?.data?.errors || {})[0]?.[0] ||
+                'Failed to offboard employee and reclaim assets.';
+            setOffboardError(msg);
+        } finally {
+            setOffboardSubmitting(false);
+        }
+    };
+
     const activeFilterCount = [search, department, roleProfileId, hardwareStatus].filter(Boolean).length;
 
     const totalWorkforce = stats?.total ?? employees.total ?? 0;
@@ -332,22 +397,24 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
                                 </a>
                             </>
                         )}
-                        <Link
-                            href={route('match.index')}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
-                        >
-                            <RiSparkling2Line className="w-3.5 h-3.5 text-[#026eff]" />
-                            <span>Smart Match</span>
-                        </Link>
                         {isAdminOrManager && (
-                            <button
-                                type="button"
-                                onClick={openCreateModal}
-                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-xs font-medium text-white transition cursor-pointer"
-                            >
-                                <RiAddLine className="w-3.5 h-3.5" />
-                                <span>Add Employee</span>
-                            </button>
+                            <>
+                                <Link
+                                    href={route('match.index')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                                >
+                                    <RiSparkling2Line className="w-3.5 h-3.5 text-[#026eff]" />
+                                    <span>Smart Match</span>
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={openCreateModal}
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-[#026eff] bg-[#026eff] hover:bg-[#0258d1] text-xs font-medium text-white transition cursor-pointer"
+                                >
+                                    <RiAddLine className="w-3.5 h-3.5" />
+                                    <span>Add Employee</span>
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -819,14 +886,16 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
 
                                             <td className="py-3 px-4 align-middle text-right">
                                                 <div className="inline-flex items-center justify-end gap-1" data-emp-menu>
-                                                    <Link
-                                                        href={route('match.index', { employee_id: emp.id })}
-                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:border-[#026eff] hover:text-[#026eff] dark:hover:text-sky-400 transition"
-                                                        title="Match hardware for employee"
-                                                    >
-                                                        <RiSparkling2Line className="w-3 h-3 text-[#026eff]" />
-                                                        <span>Match</span>
-                                                    </Link>
+                                                    {isAdminOrManager && (
+                                                        <Link
+                                                            href={route('match.index', { employee_id: emp.id })}
+                                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:border-[#026eff] hover:text-[#026eff] dark:hover:text-sky-400 transition"
+                                                            title="Match hardware for employee"
+                                                        >
+                                                            <RiSparkling2Line className="w-3 h-3 text-[#026eff]" />
+                                                            <span>Match</span>
+                                                        </Link>
+                                                    )}
 
                                                     <div className="relative">
                                                         <button
@@ -878,21 +947,32 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
                                                                     </button>
                                                                 )}
 
-                                                                {isAdminOrManager && activeAssignment && (
+                                                                {isAdminOrManager && (activeAssignments.length > 0 || activeLicenses.length > 0) && (
                                                                     <>
                                                                         <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
                                                                         <button
                                                                             type="button"
-                                                                            onClick={() => {
-                                                                                setOpenMenuId(null);
-                                                                                setUnassignTarget(emp);
-                                                                            }}
-                                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                                                            onClick={() => openOffboardModal(emp)}
+                                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer"
                                                                         >
-                                                                            <RiLinkUnlink className="w-3.5 h-3.5" />
-                                                                            <span>Unassign Device</span>
+                                                                            <RiExchangeLine className="w-3.5 h-3.5" />
+                                                                            <span>Offboard &amp; Reclaim</span>
                                                                         </button>
                                                                     </>
+                                                                )}
+
+                                                                {isAdminOrManager && activeAssignment && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setOpenMenuId(null);
+                                                                            setUnassignTarget(emp);
+                                                                        }}
+                                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                                                    >
+                                                                        <RiLinkUnlink className="w-3.5 h-3.5" />
+                                                                        <span>Unassign Device</span>
+                                                                    </button>
                                                                 )}
                                                             </div>
                                                         )}
@@ -1302,11 +1382,300 @@ export default function EmployeesIndex({ employees, role_profiles = [], departme
                         </div>
                     </div>
 
-                    <div className="mt-5 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+                    <div className="mt-5 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2">
+                        <div>
+                            {isAdminOrManager &&
+                                ((custodyTarget?.active_assignments?.length || 0) > 0 ||
+                                    (custodyTarget?.active_license_assignments?.length || 0) > 0) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => openOffboardModal(custodyTarget)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 text-xs font-medium transition cursor-pointer"
+                                    >
+                                        <RiExchangeLine className="w-3.5 h-3.5" />
+                                        <span>Offboard &amp; Reclaim All</span>
+                                    </button>
+                                )}
+                        </div>
                         <SecondaryButton type="button" onClick={() => setCustodyTargetId(null)}>
                             Close
                         </SecondaryButton>
                     </div>
+                </div>
+            </Modal>
+
+            {/* Employee Offboarding & Multi-Asset Reclamation Modal */}
+            <Modal show={Boolean(offboardTarget)} onClose={closeOffboardModal} maxWidth="lg">
+                <div className="p-6">
+                    <div className="flex items-start justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                        <div>
+                            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                                Offboard &amp; Reclaim Assets &mdash; {offboardTarget?.name}
+                            </h3>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                {offboardTarget?.department} &bull;{' '}
+                                {offboardTarget?.role_profile?.name || 'No Role Profile'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeOffboardModal}
+                            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition cursor-pointer"
+                            aria-label="Close offboarding modal"
+                        >
+                            <RiCloseLine className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {!offboardResult ? (
+                        <form onSubmit={handleOffboardSubmit} className="mt-4 space-y-4">
+                            <div className="p-3.5 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/50 space-y-2.5 text-xs">
+                                <div className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    Custody Items to Reclaim
+                                </div>
+                                {(offboardTarget?.active_assignments?.length || 0) > 0 && (
+                                    <div className="space-y-1.5">
+                                        <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                                            Hardware Assets ({offboardTarget.active_assignments.length})
+                                        </div>
+                                        <div className="space-y-1">
+                                            {offboardTarget.active_assignments.map((asg) => (
+                                                <div
+                                                    key={asg.id}
+                                                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                                                >
+                                                    <span className="font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                                                        {asg.device?.brand} {asg.device?.model}
+                                                    </span>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className="capitalize text-[10px] px-1.5 py-0.5 bg-[#026eff]/10 text-[#026eff] dark:text-sky-400 border border-[#026eff]/20 rounded-sm">
+                                                            {asg.device?.device_type}
+                                                        </span>
+                                                        <span className="font-mono text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-sm">
+                                                            {asg.device?.asset_tag}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {(offboardTarget?.active_license_assignments?.length || 0) > 0 && (
+                                    <div className="space-y-1.5 pt-1">
+                                        <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                                            Active Software Seats ({offboardTarget.active_license_assignments.length})
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {offboardTarget.active_license_assignments.map((licAsg) => (
+                                                <span
+                                                    key={licAsg.id}
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-700 dark:text-zinc-300"
+                                                >
+                                                    <RiKey2Line className="w-3 h-3 text-[#026eff] dark:text-sky-400" />
+                                                    <span>{licAsg.license?.name}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <InputLabel value="Offboarding Reason *" className="mb-1.5" />
+                                    <CustomSelect
+                                        value={offboardForm.reason}
+                                        onChange={(val) => setOffboardForm((prev) => ({ ...prev, reason: val }))}
+                                        options={[
+                                            { value: 'resignation', label: 'Resignation / Separation' },
+                                            { value: 'role_transition', label: 'Role Transition / Transfer' },
+                                            { value: 'hardware_upgrade', label: 'Hardware Refresh / Upgrade' },
+                                            { value: 'contract_end', label: 'Contract End' },
+                                            { value: 'other', label: 'Other' },
+                                        ]}
+                                    />
+                                </div>
+                                <div>
+                                    <InputLabel value="Returned Hardware Condition *" className="mb-1.5" />
+                                    <CustomSelect
+                                        value={offboardForm.condition}
+                                        onChange={(val) => setOffboardForm((prev) => ({ ...prev, condition: val }))}
+                                        options={[
+                                            { value: 'excellent', label: 'Excellent (Like New)' },
+                                            { value: 'good', label: 'Good (Ready for Recirculation)' },
+                                            { value: 'fair', label: 'Fair (Functional / Minor Wear)' },
+                                            { value: 'needs_repair', label: 'Needs Repair (Route to Maintenance)' },
+                                        ]}
+                                    />
+                                </div>
+                            </div>
+
+                            {offboardForm.condition === 'needs_repair' && (
+                                <div className="p-3 rounded-sm border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                                    <RiAlertLine className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <span>
+                                        Hardware marked <span className="font-semibold">Needs Repair</span> will be routed directly to the{' '}
+                                        <span className="font-semibold">Maintenance</span> stage with status{' '}
+                                        <span className="font-mono">in_repair</span> rather than the available stockroom pool.
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="space-y-2.5 p-3 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/40">
+                                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-zinc-700 dark:text-zinc-200">
+                                    <Checkbox
+                                        checked={offboardForm.wipe_confirmed}
+                                        onChange={(e) =>
+                                            setOffboardForm((prev) => ({ ...prev, wipe_confirmed: e.target.checked }))
+                                        }
+                                    />
+                                    <span>Data wipe &amp; sanitization verified (NIST SP 800-88 / ISO 19770-1)</span>
+                                </label>
+
+                                {(offboardTarget?.active_license_assignments?.length || 0) > 0 && (
+                                    <label className="flex items-center gap-2.5 cursor-pointer text-xs text-zinc-700 dark:text-zinc-200">
+                                        <Checkbox
+                                            checked={offboardForm.revoke_licenses}
+                                            onChange={(e) =>
+                                                setOffboardForm((prev) => ({ ...prev, revoke_licenses: e.target.checked }))
+                                            }
+                                        />
+                                        <span>
+                                            Revoke all active software license seats ({offboardTarget.active_license_assignments.length})
+                                        </span>
+                                    </label>
+                                )}
+                            </div>
+
+                            <div>
+                                <InputLabel htmlFor="offboard_notes" value="Offboarding Audit Notes" />
+                                <textarea
+                                    id="offboard_notes"
+                                    rows={2}
+                                    value={offboardForm.notes}
+                                    onChange={(e) => setOffboardForm((prev) => ({ ...prev, notes: e.target.value }))}
+                                    placeholder="Charger returned, SSD sanitized, accessories accounted for..."
+                                    className="mt-1.5 block w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 py-2 px-3 focus:outline-none focus:border-[#026eff] focus:ring-0"
+                                />
+                            </div>
+
+                            {offboardError && (
+                                <div className="p-3 rounded-sm border border-rose-500/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-300">
+                                    {offboardError}
+                                </div>
+                            )}
+
+                            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-2">
+                                <SecondaryButton type="button" onClick={closeOffboardModal}>
+                                    Cancel
+                                </SecondaryButton>
+                                <DangerButton type="submit" disabled={offboardSubmitting}>
+                                    {offboardSubmitting ? 'Reclaiming...' : 'Confirm Offboard & Reclaim'}
+                                </DangerButton>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="mt-4 space-y-4">
+                            <div className="p-3.5 rounded-sm border border-emerald-500/30 bg-emerald-500/10 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
+                                <RiCheckLine className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                                <div>
+                                    <div className="font-semibold">Offboarding Complete</div>
+                                    <div className="mt-0.5">{offboardResult.message}</div>
+                                </div>
+                            </div>
+
+                            {(offboardResult.reclaimed_devices?.length || 0) > 0 && (
+                                <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
+                                        Reclaimed Hardware ({offboardResult.reclaimed_devices.length})
+                                    </div>
+                                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-sm">
+                                        {offboardResult.reclaimed_devices.map((dev) => (
+                                            <div key={dev.id} className="p-2.5 flex items-center justify-between gap-2 text-xs bg-white dark:bg-zinc-950/40">
+                                                <div className="min-w-0">
+                                                    <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 mr-2">
+                                                        {dev.asset_tag}
+                                                    </span>
+                                                    <span className="text-zinc-700 dark:text-zinc-300">
+                                                        {dev.brand} {dev.model}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <span className="capitalize text-[10px] px-1.5 py-0.5 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                                                        {dev.lifecycle_stage}
+                                                    </span>
+                                                    <span className="capitalize text-[10px] px-1.5 py-0.5 rounded-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
+                                                        {dev.status.replace('_', ' ')}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {(offboardResult.revoked_licenses?.length || 0) > 0 && (
+                                <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
+                                        Revoked Software Seats ({offboardResult.revoked_licenses.length})
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {offboardResult.revoked_licenses.map((lic) => (
+                                            <span
+                                                key={lic.assignment_id}
+                                                className="inline-flex items-center gap-1 px-2 py-1 rounded-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px] text-zinc-700 dark:text-zinc-300"
+                                            >
+                                                <RiShieldCheckLine className="w-3 h-3 text-emerald-500" />
+                                                <span>{lic.license_name}</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {(offboardResult.circulation_matches?.length || 0) > 0 && (
+                                <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
+                                        Immediate Recirculation Opportunities
+                                    </div>
+                                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-sm max-h-48 overflow-y-auto">
+                                        {offboardResult.circulation_matches.map((m) => (
+                                            <div key={m.employee_id} className="p-2.5 flex items-center justify-between gap-3 text-xs bg-white dark:bg-zinc-950/40">
+                                                <div className="min-w-0">
+                                                    <div className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                                                        {m.name}
+                                                    </div>
+                                                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                                                        {m.department} &bull; {m.role_name} &bull; {m.priority_reason}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <span className="px-1.5 py-0.5 rounded-sm bg-[#026eff]/10 border border-[#026eff]/20 text-[#026eff] dark:text-sky-400 text-[10px] font-semibold tabular-nums">
+                                                        {Math.round(m.match_score * 100)}% fit
+                                                    </span>
+                                                    <Link
+                                                        href={route('match.index', { employee_id: m.employee_id })}
+                                                        onClick={closeOffboardModal}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-sm bg-[#026eff] hover:bg-[#0258d1] text-white text-[11px] font-medium transition"
+                                                    >
+                                                        <RiSparkling2Line className="w-3 h-3" />
+                                                        <span>Reassign via Match</span>
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+                                <PrimaryButton type="button" onClick={closeOffboardModal}>
+                                    Done
+                                </PrimaryButton>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </Modal>
         </AuthenticatedLayout>

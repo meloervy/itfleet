@@ -22,6 +22,7 @@ import {
     RiDownload2Line,
     RiEditLine,
     RiFileCopyLine,
+    RiFilePdfLine,
     RiKey2Line,
     RiRefreshLine,
     RiSearchLine,
@@ -324,6 +325,15 @@ export default function LicensesIndex({
                                 >
                                     <RiDownload2Line className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                     <span>Export CSV</span>
+                                </a>
+                                <a
+                                    href={route('licenses.export.pdf')}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                                >
+                                    <RiFilePdfLine className="w-3.5 h-3.5 text-rose-500" />
+                                    <span>Export PDF</span>
                                 </a>
                                 <button
                                     type="button"

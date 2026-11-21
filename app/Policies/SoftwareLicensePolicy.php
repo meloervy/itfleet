@@ -46,4 +46,9 @@ class SoftwareLicensePolicy
     {
         return $user->isAdmin() || $user->isManager();
     }
+
+    public function exportPdf(User $user): bool
+    {
+        return $user->isAdmin() || $user->isManager();
+    }
 }

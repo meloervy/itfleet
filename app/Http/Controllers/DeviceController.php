@@ -340,6 +340,7 @@ class DeviceController extends Controller
             ]);
 
             $result = $matchingService->reclaimDevice($device->activeAssignment->employee->id, [
+                'device_id' => $device->id,
                 'reason' => $validated['reason'] ?? 'hardware_upgrade',
                 'condition' => $validated['condition'] ?? $device->condition,
                 'wipe_confirmed' => $validated['wipe_confirmed'] ?? true,

@@ -192,6 +192,128 @@ class MatchingService
     }
 
     /**
+     * Atomically offboard an employee: reclaim all assigned hardware (compute & non-compute),
+     * optionally revoke active software license seats, and return recirculation opportunities.
+     *
+     * @param  array<string, mixed>  $details
+     * @return array<string, mixed>
+     */
+    public function offboardEmployee(int $employeeId, array $details, ?int $userId = null): array
+    {
+        return DB::transaction(function () use ($employeeId, $details, $userId): array {
+            $now = now();
+            $employee = Employee::with([
+                'activeAssignment.device',
+                'activeAssignments.device',
+                'activeLicenseAssignments.license',
+                'roleProfile',
+            ])->findOrFail($employeeId);
+
+            $activeAssignments = $employee->activeAssignments
+                ->filter(fn ($assignment): bool => $assignment->device !== null)
+                ->values();
+
+            $shouldRevokeLicenses = array_key_exists('revoke_licenses', $details)
+                ? (bool) $details['revoke_licenses']
+                : true;
+
+            $activeLicenseAssignments = $shouldRevokeLicenses
+                ? $employee->activeLicenseAssignments
+                : collect();
+
+            if ($activeAssignments->isEmpty() && $activeLicenseAssignments->isEmpty()) {
+                throw new \InvalidArgumentException("Employee {$employee->name} has no active hardware assignments or software license seats to reclaim.");
+            }
+
+            $primaryDevice = $employee->activeAssignment?->device ?? $activeAssignments->first()?->device;
+            $wipeStatus = (! empty($details['wipe_confirmed'])) ? 'Data Wipe Verified & Sanitized' : 'Wipe Pending';
+            $reasonLabel = ucfirst(str_replace('_', ' ', (string) ($details['reason'] ?? 'Offboarding')));
+
+            $reclaimedDevices = [];
+            foreach ($activeAssignments as $assignment) {
+                $device = $assignment->device;
+                $fromStage = $device->lifecycle_stage;
+
+                $assignment->update(['unassigned_at' => $now]);
+
+                $newCondition = (string) ($details['condition'] ?? $device->condition);
+                $targetStage = ($newCondition === 'needs_repair') ? 'maintenance' : 'reclaimed';
+                $targetStatus = ($newCondition === 'needs_repair') ? 'in_repair' : 'available';
+
+                $device->update([
+                    'condition' => $newCondition,
+                    'status' => $targetStatus,
+                    'lifecycle_stage' => $targetStage,
+                ]);
+
+                $eventNotes = sprintf(
+                    'Asset reclaimed from %s via %s. Condition: %s. %s. %s',
+                    $employee->name,
+                    $reasonLabel,
+                    ucfirst($newCondition),
+                    $wipeStatus,
+                    (string) ($details['notes'] ?? '')
+                );
+
+                LifecycleEvent::create([
+                    'device_id' => $device->id,
+                    'from_stage' => $fromStage,
+                    'to_stage' => $targetStage,
+                    'changed_by_user_id' => $userId ?? auth()->id(),
+                    'notes' => trim($eventNotes),
+                ]);
+
+                $reclaimedDevices[] = $device->fresh();
+            }
+
+            $revokedLicenses = [];
+            foreach ($activeLicenseAssignments as $licAssignment) {
+                $licAssignment->update(['revoked_at' => $now]);
+                $revokedLicenses[] = [
+                    'assignment_id' => $licAssignment->id,
+                    'license_id' => $licAssignment->software_license_id,
+                    'license_name' => $licAssignment->license?->name ?? 'Software License',
+                    'vendor' => $licAssignment->license?->vendor,
+                ];
+            }
+
+            $primaryFresh = $primaryDevice ? $primaryDevice->fresh() : null;
+            $recirculationMatches = $primaryFresh
+                ? $this->bridgeSwapEngine->findRecirculationMatches($primaryFresh, $employeeId)
+                : [];
+
+            $reclaimedCount = count($reclaimedDevices);
+            if ($reclaimedCount === 1 && $primaryFresh) {
+                $baseMessage = "Device {$primaryFresh->asset_tag} ({$primaryFresh->brand} {$primaryFresh->model}) reclaimed from {$employee->name} and returned to pool.";
+            } elseif ($reclaimedCount > 1) {
+                $baseMessage = "{$reclaimedCount} hardware assets reclaimed from {$employee->name} and returned to pool.";
+            } else {
+                $baseMessage = "Offboarding complete for {$employee->name}.";
+            }
+
+            $revokedCount = count($revokedLicenses);
+            if ($revokedCount > 0) {
+                $licWord = $revokedCount === 1 ? 'software license seat' : 'software license seats';
+                $message = "{$baseMessage} Revoked {$revokedCount} {$licWord}.";
+            } else {
+                $message = $baseMessage;
+            }
+
+            return [
+                'success' => true,
+                'message' => $message,
+                'device' => $primaryFresh,
+                'reclaimed_devices' => $reclaimedDevices,
+                'reclaimed_count' => $reclaimedCount,
+                'revoked_licenses' => $revokedLicenses,
+                'revoked_licenses_count' => $revokedCount,
+                'employee' => $employee,
+                'circulation_matches' => $recirculationMatches,
+            ];
+        });
+    }
+
+    /**
      * Atomically reclaim an assigned device back into the inventory pool during employee offboarding or role change.
      */
     public function reclaimDevice(int $employeeId, array $details, ?int $userId = null): array

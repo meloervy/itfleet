@@ -119,6 +119,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/devices/{id}/retire', [DeviceController::class, 'retire'])->whereNumber('id')->name('devices.retire');
 
         // Software Licenses & Seat Allocation
+        Route::get('/licenses/export/pdf', [SoftwareLicenseController::class, 'exportPdf'])->name('licenses.export.pdf');
         Route::get('/licenses/export/csv', [SoftwareLicenseController::class, 'exportCsv'])->name('licenses.export.csv');
         Route::post('/licenses', [SoftwareLicenseController::class, 'store'])->name('licenses.store');
         Route::put('/licenses/{id}', [SoftwareLicenseController::class, 'update'])->whereNumber('id')->name('licenses.update');

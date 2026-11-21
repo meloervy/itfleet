@@ -4,6 +4,7 @@ import DeviceFinancialCard from '@/Components/Devices/DeviceFinancialCard';
 import DeviceLifecycleStepper from '@/Components/Devices/DeviceLifecycleStepper';
 import {
     LogMaintenanceModal,
+    ReclaimDeviceModal,
     TransitionLifecycleModal,
     UpdateMaintenanceLogModal,
 } from '@/Components/Devices/DeviceModals';
@@ -98,6 +99,7 @@ export default function DevicesShow({ device, employees = [], can_view_financial
     const [isEditing, setIsEditing] = useState(false);
     const [showLifecycleModal, setShowLifecycleModal] = useState(false);
     const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+    const [showReclaimModal, setShowReclaimModal] = useState(false);
     const [selectedLogToUpdate, setSelectedLogToUpdate] = useState(null);
     const [copiedField, setCopiedField] = useState(null);
     const [fetchingPhoto, setFetchingPhoto] = useState(false);
@@ -1260,14 +1262,24 @@ export default function DevicesShow({ device, employees = [], can_view_financial
                                 </div>
 
                                 {isAdminOrManager && (
-                                    <button
-                                        type="button"
-                                        onClick={handleDirectUnassign}
-                                        disabled={unassignProcessing}
-                                        className="w-full py-2 px-3 rounded-sm border border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-medium transition cursor-pointer disabled:opacity-50"
-                                    >
-                                        {unassignProcessing ? 'Unassigning...' : 'Unassign from Custodian'}
-                                    </button>
+                                    <div className="space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowReclaimModal(true)}
+                                            className="w-full py-2 px-3 rounded-sm border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 text-amber-700 dark:text-amber-400 text-xs font-medium transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+                                        >
+                                            <RiExchangeLine className="w-3.5 h-3.5" />
+                                            <span>Reclaim &amp; Sanitize</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleDirectUnassign}
+                                            disabled={unassignProcessing}
+                                            className="w-full py-2 px-3 rounded-sm border border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-medium transition cursor-pointer disabled:opacity-50"
+                                        >
+                                            {unassignProcessing ? 'Unassigning...' : 'Unassign from Custodian'}
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         ) : (
@@ -1392,6 +1404,13 @@ export default function DevicesShow({ device, employees = [], can_view_financial
                 canViewFinancials={canViewFinancials}
                 onClose={() => setSelectedLogToUpdate(null)}
                 onSubmit={handleUpdateMaintenanceLog}
+            />
+
+            <ReclaimDeviceModal
+                show={showReclaimModal}
+                device={device}
+                onClose={() => setShowReclaimModal(false)}
+                onSuccess={() => router.reload({ only: ['device'] })}
             />
         </AuthenticatedLayout>
     );

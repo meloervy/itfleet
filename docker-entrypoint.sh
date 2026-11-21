@@ -15,8 +15,13 @@ chmod -R 775 /app/storage /app/bootstrap/cache /app/database
 
 # Check if APP_KEY is set, generate if missing
 if [ -z "$APP_KEY" ]; then
-    echo "==> Generating application key..."
-    php artisan key:generate --force
+    if [ -f /app/.env ]; then
+        echo "==> Generating application key..."
+        php artisan key:generate --force
+    else
+        echo "==> Generating ephemeral APP_KEY for this container instance..."
+        export APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
+    fi
 fi
 
 # Run database migrations and seeding if needed
@@ -46,4 +51,6 @@ SERVER_PORT="${PORT:-8080}"
 echo "==> ITFleet is ready! Serving on 0.0.0.0:${SERVER_PORT}..."
 
 # Exec web server
-exec php -d variables_order=EGPCS -S "0.0.0.0:${SERVER_PORT}" -t /app/public
+export PHP_CLI_SERVER_WORKERS="${PHP_CLI_SERVER_WORKERS:-4}"
+cd /app/public
+exec php -d variables_order=EGPCS -S "0.0.0.0:${SERVER_PORT}" /app/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php

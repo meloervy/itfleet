@@ -189,21 +189,97 @@ class BridgeSwapEngine
         ?int $userId = null
     ): array {
         return DB::transaction(function () use ($bridgeDeviceId, $donorEmployeeId, $requesterEmployeeId, $donorDeviceId, $userId) {
+            if ($donorEmployeeId === $requesterEmployeeId) {
+                throw new \InvalidArgumentException('Donor and requester must be different employees.');
+            }
+
+            if ($bridgeDeviceId === $donorDeviceId) {
+                throw new \InvalidArgumentException('Bridge device and donor device must be different assets.');
+            }
+
             $now = now();
-            $donor = Employee::findOrFail($donorEmployeeId);
-            $requester = Employee::findOrFail($requesterEmployeeId);
+            $donor = Employee::with('roleProfile')->findOrFail($donorEmployeeId);
+            $requester = Employee::with('roleProfile')->findOrFail($requesterEmployeeId);
             $bridgeDevice = Device::findOrFail($bridgeDeviceId);
             $donorDevice = Device::findOrFail($donorDeviceId);
 
-            Assignment::where('device_id', $donorDeviceId)
+            if (! $bridgeDevice->isComputeDevice() || $bridgeDevice->status !== 'available') {
+                throw new \InvalidArgumentException("Bridge device {$bridgeDevice->asset_tag} is not an available compute unit.");
+            }
+
+            if (! $donorDevice->isComputeDevice()) {
+                throw new \InvalidArgumentException("Donor device {$donorDevice->asset_tag} is not a compute unit.");
+            }
+
+            $donorActiveAssignment = Assignment::where('device_id', $donorDeviceId)
                 ->where('employee_id', $donorEmployeeId)
                 ->whereNull('unassigned_at')
-                ->update(['unassigned_at' => $now]);
+                ->first();
 
-            Assignment::where('employee_id', $requesterEmployeeId)
+            if (! $donorActiveAssignment) {
+                throw new \InvalidArgumentException("Donor device {$donorDevice->asset_tag} is not actively assigned to {$donor->name}.");
+            }
+
+            $bridgeFromStage = $bridgeDevice->lifecycle_stage ?: 'acquisition';
+            $donorFromStage = $donorDevice->lifecycle_stage ?: 'deployment';
+
+            $donorActiveAssignment->update(['unassigned_at' => $now]);
+
+            $requesterPrevAssignments = Assignment::with('device')
+                ->where('employee_id', $requesterEmployeeId)
                 ->whereNull('unassigned_at')
                 ->whereHas('device', fn ($q) => $q->compute())
-                ->update(['unassigned_at' => $now]);
+                ->get();
+
+            $releasedRequesterDevices = [];
+            foreach ($requesterPrevAssignments as $prevAssignment) {
+                $prevAssignment->update(['unassigned_at' => $now]);
+                $prevDevice = $prevAssignment->device;
+
+                if ($prevDevice && $prevDevice->id !== $donorDeviceId && $prevDevice->id !== $bridgeDeviceId) {
+                    $prevStage = $prevDevice->lifecycle_stage ?: 'deployment';
+                    $prevDevice->update([
+                        'status' => 'available',
+                        'lifecycle_stage' => 'reclaimed',
+                    ]);
+
+                    LifecycleEvent::create([
+                        'device_id' => $prevDevice->id,
+                        'from_stage' => $prevStage,
+                        'to_stage' => 'reclaimed',
+                        'changed_by_user_id' => $userId ?? auth()->id(),
+                        'notes' => "Released from {$requester->name} during Dynamic Bridge Swap to {$donorDevice->asset_tag}.",
+                    ]);
+
+                    $releasedRequesterDevices[] = $prevDevice->fresh();
+                }
+            }
+
+            $donorMatchScore = 0.85;
+            if ($donor->roleProfile) {
+                $donorEval = $this->scorer->evaluateDevice($bridgeDevice, [
+                    'min_cpu_tier' => $donor->roleProfile->min_cpu_tier,
+                    'min_ram_gb' => $donor->roleProfile->min_ram_gb,
+                    'min_storage_gb' => $donor->roleProfile->min_storage_gb,
+                    'requires_gpu' => (bool) $donor->roleProfile->requires_gpu,
+                    'min_gpu_tier' => $donor->roleProfile->min_gpu_tier ?? 'none',
+                    'portability_required' => (bool) $donor->roleProfile->portability_required,
+                ], false);
+                $donorMatchScore = $donorEval['score'];
+            }
+
+            $requesterMatchScore = 0.95;
+            if ($requester->roleProfile) {
+                $requesterEval = $this->scorer->evaluateDevice($donorDevice, [
+                    'min_cpu_tier' => $requester->roleProfile->min_cpu_tier,
+                    'min_ram_gb' => $requester->roleProfile->min_ram_gb,
+                    'min_storage_gb' => $requester->roleProfile->min_storage_gb,
+                    'requires_gpu' => (bool) $requester->roleProfile->requires_gpu,
+                    'min_gpu_tier' => $requester->roleProfile->min_gpu_tier ?? 'none',
+                    'portability_required' => (bool) $requester->roleProfile->portability_required,
+                ], false);
+                $requesterMatchScore = $requesterEval['score'];
+            }
 
             $bridgeDevice->update([
                 'status' => 'assigned',
@@ -214,7 +290,7 @@ class BridgeSwapEngine
                 'employee_id' => $donorEmployeeId,
                 'assigned_at' => $now,
                 'unassigned_at' => null,
-                'match_score' => 0.85,
+                'match_score' => $donorMatchScore,
                 'assignment_source' => 'ai_recommended',
             ]);
 
@@ -227,13 +303,13 @@ class BridgeSwapEngine
                 'employee_id' => $requesterEmployeeId,
                 'assigned_at' => $now,
                 'unassigned_at' => null,
-                'match_score' => 0.95,
+                'match_score' => $requesterMatchScore,
                 'assignment_source' => 'ai_recommended',
             ]);
 
             LifecycleEvent::create([
                 'device_id' => $bridgeDeviceId,
-                'from_stage' => 'acquisition',
+                'from_stage' => $bridgeFromStage,
                 'to_stage' => 'deployment',
                 'changed_by_user_id' => $userId ?? auth()->id(),
                 'notes' => "Deployed as Bridge Unit to {$donor->name} in 2-step cascade swap with {$donorDevice->asset_tag}.",
@@ -241,7 +317,7 @@ class BridgeSwapEngine
 
             LifecycleEvent::create([
                 'device_id' => $donorDeviceId,
-                'from_stage' => 'deployment',
+                'from_stage' => $donorFromStage,
                 'to_stage' => 'deployment',
                 'changed_by_user_id' => $userId ?? auth()->id(),
                 'notes' => "Cascade reallocated from {$donor->name} to {$requester->name} via Dynamic Inventory Bridge Swap (CapEx Avoided: ₱".number_format($this->scorer->estimateDeviceValuePhp($donorDevice), 2).').',
@@ -253,8 +329,9 @@ class BridgeSwapEngine
                 'requester_assignment' => $requesterAssignment,
                 'donor' => $donor,
                 'requester' => $requester,
-                'bridge_device' => $bridgeDevice,
-                'donor_device' => $donorDevice,
+                'bridge_device' => $bridgeDevice->fresh(),
+                'donor_device' => $donorDevice->fresh(),
+                'released_requester_devices' => $releasedRequesterDevices,
             ];
         });
     }

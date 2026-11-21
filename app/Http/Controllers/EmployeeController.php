@@ -168,7 +168,7 @@ class EmployeeController extends Controller
     }
 
     /**
-     * Offboard an employee, reclaim and sanitize their hardware asset, and return recirculation opportunities.
+     * Offboard an employee, reclaim and sanitize their hardware assets, revoke licenses, and return recirculation opportunities.
      */
     public function offboard(Request $request, int $id, MatchingService $matchingService): JsonResponse|RedirectResponse
     {
@@ -176,10 +176,22 @@ class EmployeeController extends Controller
             'reason' => ['required', 'string', 'in:resignation,role_transition,hardware_upgrade,contract_end,other'],
             'condition' => ['required', 'string', 'in:excellent,good,fair,needs_repair'],
             'wipe_confirmed' => ['required', 'boolean'],
+            'revoke_licenses' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $result = $matchingService->reclaimDevice($id, $validated, auth()->id());
+        try {
+            $result = $matchingService->offboardEmployee($id, $validated, auth()->id());
+        } catch (\InvalidArgumentException $e) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
+            return back()->with('error', $e->getMessage());
+        }
 
         if ($request->wantsJson()) {
             return response()->json($result);

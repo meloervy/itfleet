@@ -158,7 +158,7 @@ class MatchingController extends Controller
     /**
      * Atomically execute a 2-step bridge swap cascade transaction.
      */
-    public function executeBridgeSwap(Request $request, MatchingService $matchingService): RedirectResponse
+    public function executeBridgeSwap(Request $request, MatchingService $matchingService): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
             'bridge_device_id' => ['required', 'exists:devices,id'],
@@ -167,13 +167,21 @@ class MatchingController extends Controller
             'donor_device_id' => ['required', 'exists:devices,id'],
         ]);
 
-        $result = $matchingService->executeBridgeSwap(
-            $validated['bridge_device_id'],
-            $validated['donor_employee_id'],
-            $validated['requester_employee_id'],
-            $validated['donor_device_id'],
-            auth()->id()
-        );
+        try {
+            $result = $matchingService->executeBridgeSwap(
+                (int) $validated['bridge_device_id'],
+                (int) $validated['donor_employee_id'],
+                (int) $validated['requester_employee_id'],
+                (int) $validated['donor_device_id'],
+                auth()->id()
+            );
+        } catch (\InvalidArgumentException $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+
+            return back()->with('error', $e->getMessage());
+        }
 
         $donor = $result['donor'];
         $requester = $result['requester'];

@@ -1,0 +1,1 @@
+import{n as e}from"./app-Bs3PkX4b.js";var t=e();function n({className:e=``,...n}){return(0,t.jsx)(`input`,{...n,type:`checkbox`,className:`h-4 w-4 rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#026eff] focus:outline-none focus:ring-0 focus:ring-offset-0 cursor-pointer `+e})}export{n as t};

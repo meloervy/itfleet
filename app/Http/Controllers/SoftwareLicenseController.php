@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\SoftwareLicense;
 use App\Models\SoftwareLicenseAssignment;
 use App\Services\ItamTrackingService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -212,6 +213,29 @@ class SoftwareLicenseController extends Controller
         $licName = $assignment->license?->name ?? 'license';
 
         return back()->with('success', "Revoked '{$licName}' seat from {$empName}.");
+    }
+
+    public function exportPdf(Request $request)
+    {
+        Gate::authorize('exportPdf', SoftwareLicense::class);
+
+        $licenses = SoftwareLicense::withCount('activeAssignments')
+            ->orderBy('name')
+            ->get();
+
+        $activeLicenses = $licenses->where('status', 'active');
+
+        $pdf = Pdf::loadView('reports.software_licenses', [
+            'licenses' => $licenses,
+            'generated_at' => now()->format('F j, Y, g:i A'),
+            'total_licenses' => $licenses->count(),
+            'active_licenses' => $activeLicenses->count(),
+            'total_seats' => (int) $activeLicenses->sum('total_seats'),
+            'assigned_seats' => (int) $activeLicenses->sum('active_assignments_count'),
+            'annual_spend' => (float) $activeLicenses->sum(fn (SoftwareLicense $l) => $l->annualized_cost),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('itfleet-software-licenses-'.date('Ymd-His').'.pdf');
     }
 
     public function exportCsv(Request $request): StreamedResponse

@@ -287,4 +287,221 @@ class BridgeSwapTest extends TestCase
             'bridge_swaps',
         ]);
     }
+
+    public function test_execute_bridge_swap_releases_requesters_previous_underprovisioned_compute_device_and_logs_actual_stages(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $bridgeDevice = Device::create([
+            'asset_tag' => 'BRG-REC-01',
+            'device_type' => 'laptop',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad T14',
+            'cpu' => 'AMD Ryzen 5',
+            'cpu_tier' => 'mid',
+            'ram_gb' => 16,
+            'storage_type' => 'SSD',
+            'storage_gb' => 512,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => 2024,
+            'condition' => 'good',
+            'status' => 'available',
+            'lifecycle_stage' => 'reclaimed',
+        ]);
+
+        $donorDevice = Device::create([
+            'asset_tag' => 'DNR-HIGH-01',
+            'device_type' => 'laptop',
+            'brand' => 'Apple',
+            'model' => 'MacBook Pro 16',
+            'cpu' => 'Apple M3 Max',
+            'cpu_tier' => 'high',
+            'ram_gb' => 36,
+            'storage_type' => 'SSD',
+            'storage_gb' => 1024,
+            'gpu_tier' => 'dedicated-high',
+            'year_acquired' => 2025,
+            'purchase_cost' => 185000.00,
+            'condition' => 'excellent',
+            'status' => 'assigned',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        $requesterOldLaptop = Device::create([
+            'asset_tag' => 'LAP-OLD-01',
+            'device_type' => 'laptop',
+            'brand' => 'HP',
+            'model' => '250 G9',
+            'cpu' => 'Intel Core i3',
+            'cpu_tier' => 'entry',
+            'ram_gb' => 8,
+            'storage_type' => 'SSD',
+            'storage_gb' => 256,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => 2022,
+            'condition' => 'good',
+            'status' => 'assigned',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        $requesterMonitor = Device::create([
+            'asset_tag' => 'MON-KEEP-01',
+            'device_type' => 'monitor',
+            'brand' => 'Dell',
+            'model' => 'UltraSharp U2723QE',
+            'year_acquired' => 2024,
+            'condition' => 'excellent',
+            'status' => 'assigned',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        $donor = Employee::create(['name' => 'Donor Staff', 'department' => 'Operations']);
+        $requester = Employee::create(['name' => 'Requester Staff', 'department' => 'Engineering']);
+
+        Assignment::create([
+            'device_id' => $donorDevice->id,
+            'employee_id' => $donor->id,
+            'assigned_at' => now()->subMonths(2),
+            'assignment_source' => 'manual_override',
+        ]);
+
+        $oldLaptopAssignment = Assignment::create([
+            'device_id' => $requesterOldLaptop->id,
+            'employee_id' => $requester->id,
+            'assigned_at' => now()->subMonths(4),
+            'assignment_source' => 'manual_override',
+        ]);
+
+        $monitorAssignment = Assignment::create([
+            'device_id' => $requesterMonitor->id,
+            'employee_id' => $requester->id,
+            'assigned_at' => now()->subMonths(4),
+            'assignment_source' => 'manual_override',
+        ]);
+
+        $response = $this->actingAs($admin)->post('/match/bridge-swap', [
+            'bridge_device_id' => $bridgeDevice->id,
+            'donor_employee_id' => $donor->id,
+            'requester_employee_id' => $requester->id,
+            'donor_device_id' => $donorDevice->id,
+        ]);
+
+        $response->assertRedirect('/dashboard');
+        $response->assertSessionHas('success');
+
+        $this->assertNotNull($oldLaptopAssignment->fresh()->unassigned_at);
+        $this->assertEquals('available', $requesterOldLaptop->fresh()->status);
+        $this->assertEquals('reclaimed', $requesterOldLaptop->fresh()->lifecycle_stage);
+
+        $this->assertDatabaseHas('lifecycle_events', [
+            'device_id' => $requesterOldLaptop->id,
+            'from_stage' => 'deployment',
+            'to_stage' => 'reclaimed',
+        ]);
+
+        $this->assertNull($monitorAssignment->fresh()->unassigned_at);
+        $this->assertEquals('assigned', $requesterMonitor->fresh()->status);
+
+        $this->assertDatabaseHas('lifecycle_events', [
+            'device_id' => $bridgeDevice->id,
+            'from_stage' => 'reclaimed',
+            'to_stage' => 'deployment',
+        ]);
+    }
+
+    public function test_execute_bridge_swap_rejects_unavailable_bridge_device_or_self_swap(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $unavailableBridge = Device::create([
+            'asset_tag' => 'BRG-BUSY-01',
+            'device_type' => 'laptop',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad T14',
+            'cpu' => 'AMD Ryzen 5',
+            'cpu_tier' => 'mid',
+            'ram_gb' => 16,
+            'storage_type' => 'SSD',
+            'storage_gb' => 512,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => 2024,
+            'condition' => 'good',
+            'status' => 'assigned',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        $availableBridge = Device::create([
+            'asset_tag' => 'BRG-FREE-02',
+            'device_type' => 'laptop',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad T14',
+            'cpu' => 'AMD Ryzen 5',
+            'cpu_tier' => 'mid',
+            'ram_gb' => 16,
+            'storage_type' => 'SSD',
+            'storage_gb' => 512,
+            'gpu_tier' => 'integrated',
+            'year_acquired' => 2024,
+            'condition' => 'good',
+            'status' => 'available',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        $donorDevice = Device::create([
+            'asset_tag' => 'DNR-GUARD-01',
+            'device_type' => 'laptop',
+            'brand' => 'Apple',
+            'model' => 'MacBook Pro 16',
+            'cpu' => 'Apple M3 Max',
+            'cpu_tier' => 'high',
+            'ram_gb' => 36,
+            'storage_type' => 'SSD',
+            'storage_gb' => 1024,
+            'gpu_tier' => 'dedicated-high',
+            'year_acquired' => 2025,
+            'condition' => 'excellent',
+            'status' => 'assigned',
+            'lifecycle_stage' => 'deployment',
+        ]);
+
+        $donor = Employee::create(['name' => 'Guard Donor', 'department' => 'Operations']);
+        $requester = Employee::create(['name' => 'Guard Requester', 'department' => 'Engineering']);
+
+        $donorAssignment = Assignment::create([
+            'device_id' => $donorDevice->id,
+            'employee_id' => $donor->id,
+            'assigned_at' => now()->subMonth(),
+            'assignment_source' => 'manual_override',
+        ]);
+
+        // 1. Unavailable bridge device rejected cleanly
+        $this->actingAs($admin)
+            ->from('/match')
+            ->post('/match/bridge-swap', [
+                'bridge_device_id' => $unavailableBridge->id,
+                'donor_employee_id' => $donor->id,
+                'requester_employee_id' => $requester->id,
+                'donor_device_id' => $donorDevice->id,
+            ])
+            ->assertRedirect('/match')
+            ->assertSessionHas('error');
+
+        $this->assertNull($donorAssignment->fresh()->unassigned_at);
+        $this->assertEquals('assigned', $donorDevice->fresh()->status);
+
+        // 2. Self-swap rejected cleanly
+        $this->actingAs($admin)
+            ->from('/match')
+            ->post('/match/bridge-swap', [
+                'bridge_device_id' => $availableBridge->id,
+                'donor_employee_id' => $donor->id,
+                'requester_employee_id' => $donor->id,
+                'donor_device_id' => $donorDevice->id,
+            ])
+            ->assertRedirect('/match')
+            ->assertSessionHas('error');
+
+        $this->assertNull($donorAssignment->fresh()->unassigned_at);
+        $this->assertEquals('available', $availableBridge->fresh()->status);
+    }
 }
